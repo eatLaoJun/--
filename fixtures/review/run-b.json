@@ -1,0 +1,48 @@
+{
+  "runId": "run-b",
+  "strategy": "review-strategy-b",
+  "model": "fixture",
+  "createdAt": "2026-10-21T00:00:00.000Z",
+  "findings": [
+    {
+      "id": "F1",
+      "file": "src/pagination.js",
+      "side": "new",
+      "startLine": 14,
+      "endLine": 16,
+      "severity": "high",
+      "message": "Exact multiples add an extra empty page: floor(total/pageSize)+1 adds one page even when the division is exact. total=40/pageSize=20 returns 3 instead of 2.",
+      "rootCause": "off_by_one_boundary"
+    },
+    {
+      "id": "F2",
+      "file": "src/parser.js",
+      "side": "new",
+      "startLine": 22,
+      "endLine": 30,
+      "severity": "high",
+      "message": "Missing null check: the payload is dereferenced before validation and crashes on null input.",
+      "rootCause": "missing_null_check"
+    },
+    {
+      "id": "F4",
+      "file": "src/cache.js",
+      "side": "new",
+      "startLine": 5,
+      "endLine": 12,
+      "severity": "critical",
+      "message": "Cache key ignores tenant id, allowing cross-tenant cache reads and a data leak.",
+      "rootCause": "missing_tenant_scope"
+    },
+    {
+      "id": "F6",
+      "file": "src/auth.js",
+      "side": "new",
+      "startLine": 40,
+      "endLine": 45,
+      "severity": "critical",
+      "message": "Role check is inverted: the admin-only branch runs when role is not admin, so members can access admin resources.",
+      "rootCause": "inverted_authorization"
+    }
+  ]
+}

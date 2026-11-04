@@ -1,0 +1,58 @@
+{
+  "runId": "run-a",
+  "strategy": "review-strategy-a",
+  "model": "fixture",
+  "createdAt": "2026-10-21T00:00:00.000Z",
+  "findings": [
+    {
+      "id": "F1",
+      "file": "src/pagination.js",
+      "side": "new",
+      "startLine": 14,
+      "endLine": 16,
+      "severity": "high",
+      "message": "Exact multiples add an extra empty page: Math.floor(total/pageSize)+1 always adds one page. Use a ceil-based formula or handle exact division. total=40/pageSize=20 returns 3.",
+      "rootCause": "off_by_one_boundary"
+    },
+    {
+      "id": "F2",
+      "file": "src/parser.js",
+      "side": "new",
+      "startLine": 22,
+      "endLine": 29,
+      "severity": "high",
+      "message": "Null input is dereferenced before any null check. A missing parser payload will crash at parser.js:24.",
+      "rootCause": "missing_null_check"
+    },
+    {
+      "id": "F3",
+      "file": "src/parser.js",
+      "side": "new",
+      "startLine": 1,
+      "endLine": 5,
+      "severity": "low",
+      "message": "Consider adding more unit tests around parser error handling.",
+      "rootCause": "generic_suggestion"
+    },
+    {
+      "id": "F4",
+      "file": "src/cache.js",
+      "side": "new",
+      "startLine": 6,
+      "endLine": 11,
+      "severity": "critical",
+      "message": "Cache key only includes user id, not tenant id. Two tenants can read each other's cached data, a cross-tenant leak.",
+      "rootCause": "missing_tenant_scope"
+    },
+    {
+      "id": "F5",
+      "file": "src/cache.js",
+      "side": "new",
+      "startLine": 6,
+      "endLine": 9,
+      "severity": "medium",
+      "message": "Cache entries never expire because TTL is ignored.",
+      "rootCause": "missing_ttl"
+    }
+  ]
+}

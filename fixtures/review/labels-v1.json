@@ -1,0 +1,50 @@
+{
+  "version": "labels-v1",
+  "createdAt": "2026-10-21T00:00:00.000Z",
+  "defects": [
+    {
+      "id": "D1",
+      "file": "src/pagination.js",
+      "side": "new",
+      "startLine": 14,
+      "endLine": 16,
+      "description": "Exact multiples add an extra empty page because floor(total/pageSize)+1 always adds one page. total=40,pageSize=20 returns 3 instead of 2.",
+      "rootCause": "off_by_one_boundary",
+      "introducedByPr": "PR-101",
+      "evidence": "Repro command exits 0 on baseline and visible test fails."
+    },
+    {
+      "id": "D2",
+      "file": "src/parser.js",
+      "side": "new",
+      "startLine": 22,
+      "endLine": 30,
+      "description": "Null input is dereferenced before the null check, causing a crash on missing parser payloads.",
+      "rootCause": "missing_null_check",
+      "introducedByPr": "PR-102",
+      "evidence": "Stack trace points at parser.js:24."
+    },
+    {
+      "id": "D3",
+      "file": "src/cache.js",
+      "side": "new",
+      "startLine": 5,
+      "endLine": 12,
+      "description": "Cache key ignores tenant id, so two tenants can read each other's cached data. Cross-tenant leak.",
+      "rootCause": "missing_tenant_scope",
+      "introducedByPr": "PR-103",
+      "evidence": "Key builder only receives userId."
+    },
+    {
+      "id": "D4",
+      "file": "src/auth.js",
+      "side": "new",
+      "startLine": 40,
+      "endLine": 45,
+      "description": "Role check is inverted: admin-only branch runs when role is not admin, allowing unauthorized users.",
+      "rootCause": "inverted_authorization",
+      "introducedByPr": "PR-104",
+      "evidence": "Authorization test expects 403 for member but receives 200."
+    }
+  ]
+}

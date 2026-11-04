@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.forgepilot/
+*.log
+.DS_Store
