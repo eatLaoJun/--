@@ -17,6 +17,7 @@ import { oneLine, sha256, shortHash } from "../utils/text.js";
 import { OperationInFlightError } from "../store/operation-store.js";
 import { ReviewChatService } from "../review/service.js";
 import type { ReviewMessage } from "../store/review-chat-store.js";
+import type { AgentStreamEvent } from "../agent/stream-events.js";
 
 export interface RunResult {
   task: Task;
@@ -127,14 +128,19 @@ export class ForgePilotHarness {
     return this.stores.reviewChat.list(taskId);
   }
 
-  async askReview(taskId: string, question: string, onDelta?: (delta: string) => void): Promise<{
+  async askReview(
+    taskId: string,
+    question: string,
+    onDelta?: (delta: string) => void,
+    onStreamEvent?: (event: AgentStreamEvent) => void,
+  ): Promise<{
     answer: string;
     history: ReviewMessage[];
   }> {
     if (!this.reviewService) {
       this.reviewService = new ReviewChatService(this.stores, await this.getModels());
     }
-    return this.reviewService.ask(taskId, question, onDelta);
+    return this.reviewService.ask(taskId, question, onDelta, onStreamEvent);
   }
 
   async requestChanges(

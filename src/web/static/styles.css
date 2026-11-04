@@ -180,3 +180,21 @@ pre.diff { margin: 0; background: #0a0f17; border: 1px solid var(--line); border
   .detail-head { flex-direction: column; }
   .actions { justify-content: flex-start; }
 }
+
+.msg-trace { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.thinking-box {
+  background: #0a0f17; border: 1px dashed #2a3a54; border-radius: 10px;
+  padding: 8px 10px; color: #9fb3cc; font-size: 12px; max-height: 200px; overflow: auto;
+}
+.trace-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--accent); margin-bottom: 4px; }
+.thinking-text { white-space: pre-wrap; font-family: var(--mono); line-height: 1.55; }
+.tool-traces { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-chip {
+  display: inline-block; font-family: var(--mono); font-size: 11px;
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; color: var(--muted);
+  background: #0f1622; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tool-chip.running { color: var(--accent-2); border-color: #2c4668; }
+.tool-chip.ok { color: var(--ok); border-color: #235346; background: #0e2a24; }
+.tool-chip.fail { color: var(--danger); border-color: #5c2a33; background: #2a1418; }
+.trace-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

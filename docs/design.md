@@ -252,6 +252,7 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | 不碰外部状态 | 没有 `apply_patch/publish_branch/create_pr` |
 | 上下文可追溯 | 每轮注入 ticket、patchHash、changed files、verification key output、diff 摘录、最近 16 条对话 |
 | 可审计 | 对话追加到 `tasks/<id>/review-chat.jsonl`，带角色、时间、模型、patchHash |
+| 过程可见 | `thinking_start/delta/end` 与 `tool_execution_start/update/end` 通过 SSE 推给工作台；回答结束后持久化工具 trace 摘要 |
 | 预算隔离 | 对话 usage 进入 metrics，但不增加 `budget.tokensUsed/toolCallsUsed`，避免耗尽修复预算 |
 
 `get_change_summary` 是可复用的只读工具：返回当前 patch、diffStat、验证记录、PR 和未解决 feedback，保证回答不是靠模型记忆。

@@ -73,6 +73,8 @@ PAUSED / CANCELLING / CANCELLED / FAILED / DELIVERED
 - 不能改码、改测试、推分支或创建 PR；
 - 回答必须引用当前 diff、验证记录、`file:line` 或 artifact；
 - 对话历史和 patch 指纹一起持久化在 `tasks/<id>/review-chat.jsonl`；
+- **展示 pi 的思考与工具事件**：`thinking_start/delta/end` 流式显示“思考过程”，`tool_execution_start/update/end` 显示工具名、参数摘要、耗时和结果；每轮回答保存工具 trace 摘要；
+- 思考过程是否出现取决于模型/Provider 是否返回 reasoning 事件；没有 reasoning 的模型只显示文本和工具；
 - 审核对话的 Token 计入 metrics，但不消耗修复阶段的 Token/工具调用预算，避免“问几个问题就没预算改码”。
 
 工作台还支持：
@@ -219,6 +221,7 @@ docs/demo-evidence.md  本地真实运行证据与口径
 ## 8. 已知限制
 
 - Web 工作台是原生 HTML/JS + SSE，不是 React；React 版本可后续替换。
+- 思考过程来自 Provider 的 reasoning 事件；不同模型可能只返回工具/文本，或对思考内容做脱敏。
 - 审核对话是只读的；要求改码必须走“要求修改”回退 REPAIR，不能在对话里直接 patch。
 - 没有 Docker/容器级隔离；真实部署应把执行面放进一次性沙箱。
 - 文件存储在单机并发下可用，跨节点需要数据库 CAS/租约。
@@ -236,6 +239,7 @@ npm test
 
 - Task CAS、租约 epoch、操作幂等；
 - 审核对话持久化、只读 prompt 上下文、要求修改回退、审批门禁、Review 预算隔离；
+- pi thinking/tool 事件摘要与 SSE 事件协议；
 - 上下文预算压缩、约束保留、工具配对完整、制品回读；
 - Review 一对一匹配、P/R、未决项、回放对比；
 - 补丁落盘后崩溃恢复、PR 响应丢失恢复、验证指纹失效；

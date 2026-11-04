@@ -282,6 +282,20 @@ function renderEvidence(detail) {
     : `<div class="empty-small">暂无验证记录。</div>`;
 }
 
+function renderToolTrace(tools) {
+  if (!Array.isArray(tools) || tools.length === 0) return "";
+  return `<div class="trace-tools">` +
+    tools
+      .map(
+        (tool) =>
+          `<span class="tool-chip ${tool.isError ? "fail" : "ok"}" title="${escapeHtml(tool.summary || "")}">` +
+          `${tool.isError ? "✗" : "✓"} ${escapeHtml(tool.toolName)}` +
+          `${tool.durationMs !== undefined ? ` · ${tool.durationMs}ms` : ""}</span>`,
+      )
+      .join("") +
+    "</div>";
+}
+
 function renderChat(history) {
   const box = $("#chat-messages");
   if (state.streaming && box.querySelector(".streaming")) {
@@ -298,8 +312,11 @@ function renderChat(history) {
       .map(
         (message) => `
       <div class="msg ${message.role}">
-        <div class="msg-meta">${message.role === "engineer" ? "工程师" : "ForgePilot"} · ${time(message.at)}</div>
+        <div class="msg-meta">${message.role === "engineer" ? "工程师" : "ForgePilot"} · ${time(message.at)}${
+          message.meta?.thinkingChars ? ` · 思考 ${message.meta.thinkingChars} 字` : ""
+        }</div>
         <div class="msg-body">${richText(message.content)}</div>
+        ${renderToolTrace(message.meta?.tools)}
       </div>`,
       )
       .join("");
@@ -351,10 +368,39 @@ async function sendChat() {
   );
   const bubble = document.createElement("div");
   bubble.className = "msg assistant streaming";
-  bubble.innerHTML = `<div class="msg-meta">ForgePilot · 正在回答</div><div class="msg-body"></div>`;
+  bubble.innerHTML = `
+    <div class="msg-meta">ForgePilot · 正在回答</div>
+    <div class="msg-trace">
+      <div class="thinking-box" hidden><div class="trace-label">思考过程</div><div class="thinking-text"></div></div>
+      <div class="tool-traces"></div>
+    </div>
+    <div class="msg-body"></div>`;
   box.appendChild(bubble);
   box.scrollTop = box.scrollHeight;
   const body = bubble.querySelector(".msg-body");
+  const thinkingBox = bubble.querySelector(".thinking-box");
+  const thinkingText = bubble.querySelector(".thinking-text");
+  const toolTraces = bubble.querySelector(".tool-traces");
+  const toolChips = new Map();
+
+  const upsertTool = (payload, done) => {
+    let chip = toolChips.get(payload.toolCallId);
+    if (!chip) {
+      chip = document.createElement("span");
+      chip.className = "tool-chip running";
+      chip.textContent = `◌ ${payload.toolName}`;
+      if (payload.input) chip.title = payload.input;
+      toolTraces.appendChild(chip);
+      toolChips.set(payload.toolCallId, chip);
+    }
+    if (done) {
+      chip.className = `tool-chip ${payload.isError ? "fail" : "ok"}`;
+      chip.textContent =
+        `${payload.isError ? "✗" : "✓"} ${payload.toolName}` +
+        (payload.durationMs !== undefined ? ` · ${payload.durationMs}ms` : "");
+      if (payload.summary) chip.title = payload.summary;
+    }
+  };
 
   try {
     const response = await fetch(`/api/tasks/${encodeURIComponent(state.selectedId)}/chat`, {
@@ -378,6 +424,24 @@ async function sendChat() {
         const payload = JSON.parse(line.slice(6));
         if (payload.type === "delta") {
           body.innerHTML = richText(body.dataset.raw ? (body.dataset.raw += payload.text) : (body.dataset.raw = payload.text));
+          box.scrollTop = box.scrollHeight;
+        } else if (payload.type === "thinking_start") {
+          thinkingBox.hidden = false;
+        } else if (payload.type === "thinking_delta") {
+          thinkingBox.hidden = false;
+          thinkingText.textContent += payload.text;
+          thinkingBox.scrollTop = thinkingBox.scrollHeight;
+          box.scrollTop = box.scrollHeight;
+        } else if (payload.type === "thinking_end") {
+          thinkingBox.hidden = false;
+        } else if (payload.type === "tool_start") {
+          upsertTool(payload, false);
+          box.scrollTop = box.scrollHeight;
+        } else if (payload.type === "tool_update") {
+          const chip = toolChips.get(payload.toolCallId);
+          if (chip && payload.text) chip.title = payload.text;
+        } else if (payload.type === "tool_end") {
+          upsertTool(payload, true);
           box.scrollTop = box.scrollHeight;
         } else if (payload.type === "error") {
           body.innerHTML = `<span class="error">${escapeHtml(payload.error)}</span>`;

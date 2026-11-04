@@ -14,6 +14,8 @@ import { buildSystemPrompt } from "./prompt.js";
 import { createHarnessExtension } from "./extension.js";
 import { createHarnessTools } from "./tools/index.js";
 import { oneLine } from "../utils/text.js";
+import type { AgentStreamEvent } from "./stream-events.js";
+import { summarizeToolInput, summarizeToolResult } from "./stream-events.js";
 
 export interface ModelContext {
   runtime: ModelRuntime;
@@ -62,6 +64,7 @@ export interface PiStageRunOptions {
   onContextMetrics?: (metrics: ContextMetrics) => void;
   onToolCall?: (name: string, input: unknown) => void;
   onText?: (delta: string) => void;
+  onStreamEvent?: (event: AgentStreamEvent) => void;
   onSession?: (session: AgentSession) => void;
   onSessionDisposed?: () => void;
 }
@@ -137,8 +140,27 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
   let abortReason: string | undefined;
 
   const unsubscribe = session.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      options.onText?.(event.assistantMessageEvent.delta);
+    if (process.env.FORGEPILOT_DEBUG_EVENTS) {
+      const extra =
+        event.type === "tool_execution_start"
+          ? ` ${event.toolName}`
+          : event.type === "message_update"
+            ? ` ${event.assistantMessageEvent.type}`
+            : "";
+      console.error("[event]", event.type + extra);
+    }
+    if (event.type === "message_update") {
+      const update = event.assistantMessageEvent;
+      if (update.type === "text_delta") {
+        options.onText?.(update.delta);
+        options.onStreamEvent?.({ type: "text_delta", text: update.delta });
+      } else if (update.type === "thinking_start") {
+        options.onStreamEvent?.({ type: "thinking_start" });
+      } else if (update.type === "thinking_delta") {
+        options.onStreamEvent?.({ type: "thinking_delta", text: update.delta });
+      } else if (update.type === "thinking_end") {
+        options.onStreamEvent?.({ type: "thinking_end", text: update.content });
+      }
       return;
     }
     if (event.type === "message_end" && event.message.role === "assistant") {
@@ -170,10 +192,37 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
     }
     if (event.type === "tool_execution_start") {
       toolCalls += 1;
+      options.onStreamEvent?.({
+        type: "tool_start",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: summarizeToolInput(event.args),
+      });
+      return;
+    }
+    if (event.type === "tool_execution_update") {
+      options.onStreamEvent?.({
+        type: "tool_update",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        text: summarizeToolResult(event.partialResult, 160),
+      });
+      return;
+    }
+    if (event.type === "tool_execution_end") {
+      options.onStreamEvent?.({
+        type: "tool_end",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        isError: event.isError,
+        durationMs: event.durationMs,
+        summary: summarizeToolResult(event.result),
+      });
       return;
     }
     if (event.type === "agent_settled") {
       if (event.aborted) abortReason = "aborted";
+      options.onStreamEvent?.({ type: "settled", aborted: event.aborted });
     }
   });
 

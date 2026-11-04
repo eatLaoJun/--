@@ -7,6 +7,7 @@ import type { ReviewMessage } from "../store/review-chat-store.js";
 import { GitWorkspace } from "../integrations/git.js";
 import { buildReviewPrompt, buildReviewSystemPrompt } from "./prompt.js";
 import { truncate } from "../utils/text.js";
+import type { AgentStreamEvent, ToolTrace } from "../agent/stream-events.js";
 
 export const REVIEW_TOOLS = [
   "read",
@@ -33,6 +34,7 @@ export class ReviewChatService {
     taskId: string,
     question: string,
     onDelta?: (delta: string) => void,
+    onStreamEvent?: (event: AgentStreamEvent) => void,
   ): Promise<{ answer: string; history: ReviewMessage[] }> {
     const task = await this.stores.tasks.get(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
@@ -64,6 +66,8 @@ export class ReviewChatService {
       workspace: new GitWorkspace(task.workspacePath),
     });
     const assembler = new ContextAssembler(this.stores.artifacts);
+    const tools: ToolTrace[] = [];
+    let thinkingChars = 0;
 
     try {
       const result = await runPiStageAgent({
@@ -78,13 +82,31 @@ export class ReviewChatService {
         countAgainstBudget: false,
         recordAttempt: false,
         onText: onDelta,
+        onStreamEvent: (event) => {
+          if (event.type === "tool_end") {
+            tools.push({
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              isError: event.isError,
+              durationMs: event.durationMs,
+              summary: event.summary,
+            });
+          }
+          if (event.type === "thinking_delta") thinkingChars += event.text.length;
+          onStreamEvent?.(event);
+        },
       });
       const answer = result.finalText.trim() || "（Agent 未返回内容，请重试或查看任务事件。）";
       await this.stores.reviewChat.append({
         taskId,
         role: "assistant",
         content: answer,
-        meta: { model: this.models.name, patchHash: task.changePackage?.patchHash ?? task.patchHash },
+        meta: {
+          model: this.models.name,
+          patchHash: task.changePackage?.patchHash ?? task.patchHash,
+          tools,
+          thinkingChars,
+        },
       });
       return { answer, history: await this.stores.reviewChat.list(taskId) };
     } catch (err) {

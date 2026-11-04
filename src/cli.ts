@@ -141,9 +141,40 @@ async function main(): Promise<void> {
     if (!task) throw new Error(`Task not found: ${taskId}`);
     console.log(`review chat · ${task.ticketId} · ${task.stage}/${task.lifecycle}`);
 
+    const showTrace = !bool(flags, "no-trace");
+    let thinkingOpen = false;
+    const trace = (event: import("./agent/stream-events.js").AgentStreamEvent) => {
+      if (!showTrace) return;
+      if (event.type === "thinking_delta") {
+        if (!thinkingOpen) {
+          process.stderr.write("\n[thinking] ");
+          thinkingOpen = true;
+        }
+        process.stderr.write(event.text);
+      } else if (event.type === "thinking_end") {
+        if (thinkingOpen) {
+          process.stderr.write("\n");
+          thinkingOpen = false;
+        }
+      } else if (event.type === "tool_start") {
+        process.stderr.write(`\n[tool] ${event.toolName} ${event.input}\n`);
+      } else if (event.type === "tool_end") {
+        process.stderr.write(
+          `[tool] ${event.toolName} ${event.isError ? "failed" : "ok"}` +
+            (event.durationMs !== undefined ? ` ${event.durationMs}ms` : "") +
+            "\n",
+        );
+      }
+    };
+
     const ask = async (message: string) => {
       process.stdout.write("ForgePilot> ");
-      const result = await harness.askReview(taskId, message, (delta) => process.stdout.write(delta));
+      const result = await harness.askReview(
+        taskId,
+        message,
+        (delta) => process.stdout.write(delta),
+        trace,
+      );
       process.stdout.write("\n");
       return result.answer;
     };
@@ -267,7 +298,7 @@ function printHelp(): void {
 
   serve [--port 4310] [--host 127.0.0.1] [--model provider/id]
   fix --ticket <file> | --issue <github-issue-url-or-fixture> [--auto-approve] [--task <id>] [--fault <name>]
-  chat <taskId> [--message "..."] [--model provider/id]
+  chat <taskId> [--message "..."] [--model provider/id] [--no-trace]
   changes <taskId> --message "请改成 ..."
   status <taskId>
   approve <taskId>

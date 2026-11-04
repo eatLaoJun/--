@@ -172,6 +172,8 @@ npm run demo:review-changes
 - 对话 Token 计入 metrics，但不消耗修复预算（否则“问几个问题就没预算改码”）；
 - 未解决的 feedback 会阻止 `package/approve/publish`；
 - 审核对话历史持久化在 `tasks/<id>/review-chat.jsonl`，页面刷新后可继续。
+- 流式事件包含 `thinking_start/delta/end` 与 `tool_start/tool_end`：CLI 默认把思考/工具打印到 stderr（`--no-trace` 关闭），Web 在回答气泡中显示“思考过程”和工具 chip；
+- 回答结束后，assistant message 的 `meta.tools` 保存工具名、耗时、是否失败和结果摘要，刷新页面仍能看到本轮用过哪些工具。
 
 ## 7. Web 工作台
 

@@ -89,11 +89,15 @@ export function createHarnessExtension(options: HarnessExtensionOptions): Extens
           return { block: true, reason: "Tool call budget exhausted; stop and report the blocker." };
         }
         const pathError = validateToolPaths(ctx, event.input);
-        if (pathError) return { block: true, reason: pathError };
+        if (pathError) {
+          if (process.env.FORGEPILOT_DEBUG_EVENTS) console.error("[gate] path blocked", pathError);
+          return { block: true, reason: pathError };
+        }
         await options.runtime.countToolCall(event.toolName, options.countAgainstBudget !== false);
         options.onToolCall?.(event.toolName, event.input);
         return undefined;
       } catch (err) {
+        if (process.env.FORGEPILOT_DEBUG_EVENTS) console.error("[gate] error", (err as Error).message);
         return { block: true, reason: `Harness gate error: ${(err as Error).message}` };
       }
     });

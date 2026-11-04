@@ -190,7 +190,21 @@ async function streamReviewChat(
   };
   write({ type: "start", taskId });
   try {
-    const result = await harness.askReview(taskId, message, (delta) => write({ type: "delta", text: delta }));
+    const result = await harness.askReview(
+      taskId,
+      message,
+      (delta) => write({ type: "delta", text: delta }),
+      (event) => {
+        // Text is already streamed through the `delta` channel; avoid duplicating it.
+        if (event.type === "text_delta") return;
+        // The full thinking text was already sent as deltas; don't resend it.
+        if (event.type === "thinking_end") {
+          write({ type: "thinking_end" });
+          return;
+        }
+        write(event);
+      },
+    );
     write({ type: "done", answer: result.answer, history: result.history });
   } catch (err) {
     write({ type: "error", error: (err as Error).message });
