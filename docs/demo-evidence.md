@@ -133,7 +133,72 @@ npm run demo:swebench -- --limit 2
 - `pairs` 表示保留下来的 tool_call ↔ tool_result 配对数量；
 - 压缩不变量由 `tests/context.test.ts` 覆盖：约束不丢、状态块不重复、无孤儿 toolResult、制品可回读。
 
-## 6. 重新生成
+## 6. 审核对话与“要求修改”闭环
+
+命令：
+
+```bash
+npm run demo:review-chat
+npm run demo:review-changes
+```
+
+一次真实运行（`demo:review-chat`）：
+
+| 字段 | 结果 |
+| --- | --- |
+| GitHub issue | `https://github.com/example/course-service/issues/101`（本地 fixture，真实 URL 走 GitHub API） |
+| 修复完成 | `PACKAGE / WAITING_APPROVAL` |
+| 审核对话 | 2 轮工程师提问 + 2 轮 Agent 回答 |
+| 回答依据 | 当前 diff、`src/pagination.js:14-15`、验证记录、artifact 测试日志 |
+| 通过审批 | patch `fcdb21ebc2d1` |
+| 最终交付 | `DONE / DELIVERED`，PR `PR-21ca371a1f` |
+| 对话条数 | 4 |
+
+一次“要求修改”运行（`demo:review-changes`）：
+
+```text
+1. 修复完成，进入 WAITING_APPROVAL
+2. 工程师提问后，在对话框提交“请把顶部旧 bug 注释一起更新”
+3. Harness 清空旧变更包，写回 unresolved feedback，退回 REPAIR
+4. Agent 产生新 patch 75afe5a2b391，重新 VERIFY、重新 PACKAGE
+5. 工程师再次对话确认
+6. 审批通过 → 推送分支/创建 PR PR-d2051abda6
+7. 最终 DONE / DELIVERED，对话 7 条
+```
+
+关键约束：
+
+- 审核对话工具是只读的，不能 `apply_patch`；
+- 对话 Token 计入 metrics，但不消耗修复预算（否则“问几个问题就没预算改码”）；
+- 未解决的 feedback 会阻止 `package/approve/publish`；
+- 审核对话历史持久化在 `tasks/<id>/review-chat.jsonl`，页面刷新后可继续。
+
+## 7. Web 工作台
+
+命令：
+
+```bash
+npm run ui
+# http://127.0.0.1:4310
+```
+
+本地验证：
+
+```text
+GET /api/health      -> {"ok":true,"version":"0.1.0"}
+GET /api/issues      -> fixture issue #101
+GET /api/tasks       -> 任务列表（stage/lifecycle/patch/PR/running）
+GET /api/tasks/:id   -> task + diff + verification + events + review chat
+POST /api/tasks/:id/chat             -> SSE 流式回答
+POST /api/tasks/:id/approve          -> 审批并通过后台任务创建 PR
+POST /api/tasks/:id/request-changes  -> 退回 REPAIR
+POST /api/tasks/:id/cancel           -> 取消并收敛
+```
+
+页面包含：Issue 创建任务、任务列表、概览、diff、验证证据、评审对话、通过/要求修改/取消按钮。当前是原生 HTML/JS + SSE，React 工作台可后续替换。
+
+## 8. 重新生成
+
 
 ```bash
 npm test

@@ -226,7 +226,80 @@ Judge 接口：
 - 报告 `resolved/N`、平均输入/输出 Token、工具调用、墙钟时间；
 - 本地 verifier 与官方 Docker Harness 接口兼容，但结果不是官方排行榜。
 
-## 8. pi-agent SDK 使用要点
+## 8. 审核对话与 Web 工作台
+
+### 8.1 对话发生在哪个阶段
+
+```text
+REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
+                         │
+          ┌──────────────┴──────────────┐
+          ▼                             ▼
+   审核对话（只读）                 要求修改
+          │                             │
+          ▼                             ▼
+   通过 → PUBLISH → DONE          REPAIR → VERIFY → PACKAGE
+```
+
+对话不是自由聊天，而是“对已打包 patch 的评审问答”。任务必须处于 `WAITING_APPROVAL`、`WAITING_INPUT`、`PAUSED`、`FAILED` 或 `DELIVERED` 才允许提问，避免和正在执行的 REPAIR 竞争同一工作区。
+
+### 8.2 只读 Review Chat
+
+| 约束 | 实现 |
+| --- | --- |
+| 不能改码 | 工具白名单只有 `read/grep/find/ls/read_artifact/get_change_summary/get_task_status/get_pr_status` |
+| 必须引用证据 | 系统提示词要求从 diff、验证记录、`file:line`、artifact 回答 |
+| 不碰外部状态 | 没有 `apply_patch/publish_branch/create_pr` |
+| 上下文可追溯 | 每轮注入 ticket、patchHash、changed files、verification key output、diff 摘录、最近 16 条对话 |
+| 可审计 | 对话追加到 `tasks/<id>/review-chat.jsonl`，带角色、时间、模型、patchHash |
+| 预算隔离 | 对话 usage 进入 metrics，但不增加 `budget.tokensUsed/toolCallsUsed`，避免耗尽修复预算 |
+
+`get_change_summary` 是可复用的只读工具：返回当前 patch、diffStat、验证记录、PR 和未解决 feedback，保证回答不是靠模型记忆。
+
+### 8.3 “要求修改”闭环
+
+1. 工程师在对话框输入意见并点“要求修改”；
+2. 写入 `HumanFeedback { message, priorPatchHash, requestedAt }`；
+3. 清空 `changePackage`，阶段回到 `REPAIR`，生命周期 `RUNNING`；
+4. REPAIR Agent 的提示词与结构化状态都包含未解决 feedback；
+5. 只有产生**新的 patchHash** 才算回应了意见；patch 未变会 nudge，超预算进入 `WAITING_INPUT`；
+6. 新 patch 重新 VERIFY、重新 PACKAGE；
+7. `package/approve/publish` 都会拒绝未解决 feedback。
+
+这条规则避免“口头答应但代码没改”，也避免把旧验证结果套到新 patch 上。
+
+### 8.4 Web 工作台
+
+`src/web/server.ts` 用 Node HTTP + 静态 HTML/JS，不引入前端构建链；SSE 用于流式回答。
+
+| 路由 | 作用 |
+| --- | --- |
+| `GET /api/issues` | 列出 GitHub issue fixture |
+| `GET /api/tasks` | 任务列表（状态、patch、PR、是否执行中） |
+| `POST /api/tasks` | 从 issue/ticket 创建任务并后台执行 |
+| `GET /api/tasks/:id` | task + diff + verifications + events + review chat |
+| `POST /api/tasks/:id/chat` | SSE 流式审核对话 |
+| `POST /api/tasks/:id/approve` | 审批并后台发布 |
+| `POST /api/tasks/:id/request-changes` | 写回意见并回到 REPAIR |
+| `POST /api/tasks/:id/cancel` | 取消并收敛 |
+
+页面结构：左侧任务列表 + Issue 创建；右侧概览、diff、证据、评审对话；底部“通过并创建 PR / 要求修改 / 取消”。轮询只刷新状态，SSE 只负责流式回答。
+
+### 8.5 GitHub issue 适配器
+
+- 本地 fixture：`fixtures/github/issue-101.json`，包含 issue 元数据和 ticket 配置；
+- 真实 URL：`GITHUB_TOKEN` + GitHub REST API；仓库到授权模板/命令的映射来自 `fixtures/github/projects.json`；
+- issue 文本只作为任务资料，不能扩大权限、选择仓库或改验证命令；
+- 没有 token 时明确报错并提示使用本地 fixture，不静默降级成伪造 issue。
+
+### 8.6 仍然保留的人工边界
+
+- 对话不能替代审批：approve 是独立动作；
+- 对话不能直接改码：要求改码必须走“要求修改”；
+- 交付后仍保留人工评审/合并，PR 创建不等于合并；
+- 当前工作台绑定 `127.0.0.1`，没有鉴权/多租户；生产需接企业 SSO、权限与审计。
+
+## 9. pi-agent SDK 使用要点
 
 | 点 | 代码 |
 | --- | --- |
@@ -242,7 +315,7 @@ Judge 接口：
 | Token 统计 | `message_end.usage` |
 | 工具耗时 | `tool_execution_end.durationMs` |
 
-## 9. 取舍与生产化清单
+## 10. 取舍与生产化清单
 
 | 当前 | 生产建议 |
 | --- | --- |
@@ -254,7 +327,7 @@ Judge 接口：
 | 启发式 Judge 默认 | LLM Judge + 人工抽检/仲裁 + 标签版本管理 |
 | CLI 报告 | React 工作台 + 实时事件流（`session.subscribe` → SSE） |
 
-## 10. 面试追问的落点
+## 11. 面试追问的落点
 
 - **为什么不用通用 Coding Agent 就结束？** 复用改码能力，补项目配置、权限、验证、可审核交付和可回放评估。
 - **只有摘要为什么不够？** 摘要会丢约束/状态；结构化字段 + 证据引用 + 原始制品才能恢复。

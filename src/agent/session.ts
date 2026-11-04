@@ -55,6 +55,10 @@ export interface PiStageRunOptions {
   allowedTools: string[];
   assembler: ContextAssembler;
   models: ModelContext;
+  systemPromptText?: string;
+  allowWaiting?: boolean;
+  countAgainstBudget?: boolean;
+  recordAttempt?: boolean;
   onContextMetrics?: (metrics: ContextMetrics) => void;
   onToolCall?: (name: string, input: unknown) => void;
   onText?: (delta: string) => void;
@@ -85,6 +89,9 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
     stage,
     allowedTools,
     assembler,
+    systemPromptText: options.systemPromptText,
+    allowWaiting: options.allowWaiting,
+    countAgainstBudget: options.countAgainstBudget,
     onContextMetrics: options.onContextMetrics,
     onToolCall: options.onToolCall,
   });
@@ -92,7 +99,8 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
   const loader = new DefaultResourceLoader({
     cwd: workspace,
     agentDir: getAgentDir(),
-    systemPromptOverride: () => buildSystemPrompt(task, stage, allowedTools),
+    systemPromptOverride: () =>
+      options.systemPromptText ?? buildSystemPrompt(task, stage, allowedTools),
     appendSystemPromptOverride: () => [],
     noContextFiles: true,
     noSkills: true,
@@ -150,11 +158,14 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
         .map((block) => block.text)
         .join("\n");
       if (text.trim()) finalText = text;
-      void runtime.addUsage({
-        input: message.usage.input,
-        output: message.usage.output,
-        cacheRead: message.usage.cacheRead,
-      });
+      void runtime.addUsage(
+        {
+          input: message.usage.input,
+          output: message.usage.output,
+          cacheRead: message.usage.cacheRead,
+        },
+        { countAgainstBudget: options.countAgainstBudget !== false },
+      );
       return;
     }
     if (event.type === "tool_execution_start") {
@@ -183,7 +194,7 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
     if (latest.cancelRequested || latest.lifecycle === "CANCELLING" || latest.lifecycle === "CANCELLED") {
       throw new CancelledError(latest.id);
     }
-    if (finalText.trim()) {
+    if (finalText.trim() && options.recordAttempt !== false) {
       await runtime.update((draft) => {
         draft.state.attempts.push({
           id: `A-${Date.now()}-agent`,

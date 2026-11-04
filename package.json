@@ -15,7 +15,10 @@
     "demo:fix": "tsx scripts/demo.ts fix",
     "demo:review": "tsx scripts/demo.ts review",
     "demo:swebench": "tsx scripts/demo-swebench.ts",
-    "demo:fault": "tsx scripts/demo.ts fault"
+    "demo:fault": "tsx scripts/demo.ts fault",
+    "ui": "tsx src/cli.ts serve --port 4310",
+    "demo:review-chat": "tsx scripts/demo-review-chat.ts",
+    "demo:review-changes": "tsx scripts/demo-review-chat.ts --request-changes"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.4.0",

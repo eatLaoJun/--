@@ -244,6 +244,64 @@ export function createHarnessTools(runtime: TaskRuntime) {
     }),
 
     defineTool({
+      name: "get_change_summary",
+      label: "Get Change Summary",
+      description:
+        "Read-only review helper: returns the proposed patch, changed files, verification evidence, PR state and any unresolved engineer feedback. " +
+        "Use this to explain why a change was made. It never modifies code.",
+      parameters: EmptySchema,
+      async execute() {
+        const task = await runtime.reload();
+        const pkg = task.changePackage;
+        let diff = "";
+        if (pkg?.patchArtifactId) {
+          try {
+            diff = await runtime.stores.artifacts.get(pkg.patchArtifactId);
+          } catch {
+            diff = "";
+          }
+        }
+        if (!diff) diff = await runtime.workspace.diff();
+        const verifications = (await runtime.stores.verifications.list(task.id)).slice(-6);
+        const pr = task.pr ?? (await runtime.stores.pr.findByTask(task.id));
+        return {
+          content: text(
+            JSON.stringify(
+              {
+                ticket: { id: task.ticketId, title: task.title, description: task.description, expected: task.expected, issueUrl: task.issueUrl },
+                stage: task.stage,
+                lifecycle: task.lifecycle,
+                patchHash: pkg?.patchHash ?? task.patchHash,
+                changedFiles: pkg?.changedFiles ?? (await runtime.workspace.changedFiles()),
+                diffStat: pkg?.diffStat,
+                rationale: pkg?.rationale,
+                verification: verifications.map((v) => ({
+                  id: v.id,
+                  kind: v.kind,
+                  command: v.command,
+                  exitCode: v.exitCode,
+                  patchHash: v.patchHash,
+                  keyOutput: v.keyOutput,
+                  artifactId: v.artifactId,
+                })),
+                unresolvedFeedback: (task.feedback ?? []).filter((f) => !f.resolvedAt),
+                pr,
+                diff: truncate(diff, 9000),
+                artifacts: {
+                  patch: pkg?.patchArtifactId,
+                  latestVerification: verifications.at(-1)?.artifactId,
+                },
+              },
+              null,
+              2,
+            ),
+          ),
+          details: { patchHash: pkg?.patchHash ?? task.patchHash, changedFiles: pkg?.changedFiles ?? [] },
+        };
+      },
+    }),
+
+    defineTool({
       name: "get_task_status",
       label: "Get Task Status",
       description: "Read the task's stage, lifecycle, budget and evidence status.",

@@ -5,7 +5,8 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { HarnessConfig, Task } from "../domain/types.js";
 import { createBudget, initialMetrics } from "../domain/types.js";
 import { STAGE_TOOLS, nextStage, stagePrompt } from "../domain/stages.js";
-import { loadTicket } from "../integrations/ticket.js";
+import { loadTicket, type LoadedTicket } from "../integrations/ticket.js";
+import { loadGithubIssue } from "../integrations/github.js";
 import { GitWorkspace, prepareTemplateWorkspace, sanitizeBranch } from "../integrations/git.js";
 import { createStores, type HarnessStores } from "./stores.js";
 import { CancelledError, InjectedCrash, TaskRuntime, BudgetExceededError } from "./runtime.js";
@@ -14,6 +15,8 @@ import { ContextAssembler, type ContextMetrics } from "../context/assembler.js";
 import { createModelContext, runPiStageAgent, type ModelContext } from "../agent/session.js";
 import { oneLine, sha256, shortHash } from "../utils/text.js";
 import { OperationInFlightError } from "../store/operation-store.js";
+import { ReviewChatService } from "../review/service.js";
+import type { ReviewMessage } from "../store/review-chat-store.js";
 
 export interface RunResult {
   task: Task;
@@ -27,7 +30,9 @@ export class ForgePilotHarness {
   private readonly owner: string;
   private readonly activeSessions = new Map<string, AgentSession>();
   private models?: ModelContext;
+  private reviewService?: ReviewChatService;
   private contextMetrics: ContextMetrics[] = [];
+  private readonly runningTasks = new Set<string>();
 
   constructor(config: HarnessConfig) {
     this.config = config;
@@ -41,7 +46,16 @@ export class ForgePilotHarness {
   }
 
   async createTaskFromTicket(ticketFile: string): Promise<{ task: Task; workspace: GitWorkspace }> {
-    const loaded = await loadTicket(this.config.projectRoot, ticketFile);
+    return this.createTaskFromLoadedTicket(await loadTicket(this.config.projectRoot, ticketFile));
+  }
+
+  async createTaskFromIssue(issueInput: string): Promise<{ task: Task; workspace: GitWorkspace }> {
+    return this.createTaskFromLoadedTicket(await loadGithubIssue(this.config.projectRoot, issueInput));
+  }
+
+  private async createTaskFromLoadedTicket(
+    loaded: LoadedTicket,
+  ): Promise<{ task: Task; workspace: GitWorkspace }> {
     const taskId = newTaskId();
     const workspacePath = path.join(this.config.root, "workspaces", taskId);
     const prepared = await prepareTemplateWorkspace(loaded.templatePath, workspacePath, taskId);
@@ -54,6 +68,8 @@ export class ForgePilotHarness {
       description: loaded.ticket.description,
       expected: loaded.ticket.expected,
       repoName: loaded.ticket.repoName,
+      issueUrl: loaded.ticket.issueUrl,
+      issueNumber: loaded.ticket.issueNumber,
       templatePath: loaded.templatePath,
       workspacePath,
       baseCommit: prepared.baseCommit,
@@ -68,6 +84,7 @@ export class ForgePilotHarness {
       constraints: loaded.constraints,
       commands: loaded.commands,
       state: { confirmedFacts: [], hypotheses: [], attempts: [], pendingQuestions: [] },
+      feedback: [],
       faults: this.config.fault ? [this.config.fault] : [],
       faultsFired: [],
       metrics: initialMetrics(),
@@ -88,6 +105,76 @@ export class ForgePilotHarness {
 
   async getTask(taskId: string): Promise<Task | undefined> {
     return this.stores.tasks.get(taskId);
+  }
+
+  isTaskRunning(taskId: string): boolean {
+    return this.runningTasks.has(taskId);
+  }
+
+  startInBackground(taskId: string): void {
+    if (this.runningTasks.has(taskId)) return;
+    this.runningTasks.add(taskId);
+    void this.run(taskId)
+      .catch(async (err) => {
+        await this.stores.events
+          .append({ taskId, type: "background_run_failed", detail: { message: (err as Error).message } })
+          .catch(() => undefined);
+      })
+      .finally(() => this.runningTasks.delete(taskId));
+  }
+
+  async reviewHistory(taskId: string): Promise<ReviewMessage[]> {
+    return this.stores.reviewChat.list(taskId);
+  }
+
+  async askReview(taskId: string, question: string, onDelta?: (delta: string) => void): Promise<{
+    answer: string;
+    history: ReviewMessage[];
+  }> {
+    if (!this.reviewService) {
+      this.reviewService = new ReviewChatService(this.stores, await this.getModels());
+    }
+    return this.reviewService.ask(taskId, question, onDelta);
+  }
+
+  async requestChanges(
+    taskId: string,
+    message: string,
+    options: { start?: boolean } = {},
+  ): Promise<Task> {
+    const trimmed = message.trim();
+    if (!trimmed) throw new Error("Feedback message must not be empty");
+    const runtime = await this.loadRuntime(taskId);
+    const task = await runtime.reload();
+    if (task.stage !== "PACKAGE" || task.lifecycle !== "WAITING_APPROVAL") {
+      throw new Error("Request changes is only available while the task is waiting for approval.");
+    }
+    const priorPatchHash = task.changePackage?.patchHash ?? task.patchHash;
+    const feedbackId = `F-${Date.now()}-${randomUUID().slice(0, 6)}`;
+    await runtime.update((draft) => {
+      draft.feedback = draft.feedback ?? [];
+      draft.feedback.push({
+        id: feedbackId,
+        message: trimmed,
+        priorPatchHash,
+        requestedAt: Date.now(),
+      });
+      draft.changePackage = undefined;
+      draft.stage = "REPAIR";
+      draft.lifecycle = "RUNNING";
+      draft.lastError = undefined;
+      draft.state.nextAction = "address engineer review feedback, then re-verify and re-package";
+    });
+    await this.stores.reviewChat.append({
+      taskId,
+      role: "engineer",
+      content: trimmed,
+      meta: { kind: "request_changes", priorPatchHash, feedbackId },
+    });
+    await runtime.saveCheckpoint("address engineer review feedback");
+    await runtime.event("changes_requested", { message: trimmed, priorPatchHash, feedbackId });
+    if (options.start !== false) this.startInBackground(taskId);
+    return runtime.task;
   }
 
   async run(taskId: string): Promise<RunResult> {
@@ -344,6 +431,26 @@ export class ForgePilotHarness {
       const diff = await runtime.currentDiff();
       const hasPatch = diff.diff.trim().length > 0;
       const hasHypothesis = after.state.hypotheses.length > 0;
+      const unresolvedAfter = (after.feedback ?? []).find((item) => !item.resolvedAt);
+      if (unresolvedAfter) {
+        if (!hasPatch || diff.patchHash === unresolvedAfter.priorPatchHash) {
+          lastReason =
+            `engineer requested changes ("${oneLine(unresolvedAfter.message, 200)}") but the patch hash ` +
+            `${diff.patchHash.slice(0, 12)} is unchanged. Apply a new patch that addresses the feedback.`;
+          continue;
+        }
+        await runtime.update((draft) => {
+          const item = (draft.feedback ?? []).find((f) => f.id === unresolvedAfter.id);
+          if (item) item.resolvedAt = Date.now();
+        });
+        await runtime.recordEvidence({
+          claim: `Addressed engineer feedback: ${oneLine(unresolvedAfter.message, 300)}`,
+          kind: "artifact",
+          reference: `patch:${diff.patchHash}`,
+        });
+        await this.advance(runtime, "VERIFY", "re-verify the patch that addresses engineer feedback");
+        return;
+      }
       if (hasPatch && hasHypothesis) {
         await runtime.recordEvidence({
           claim: `Patch ${diff.patchHash.slice(0, 12)} applied to ${diff.changedFiles.length} file(s).`,
@@ -418,6 +525,13 @@ export class ForgePilotHarness {
 
   private async runPackage(runtime: TaskRuntime): Promise<void> {
     const task = await runtime.reload();
+    const unresolved = (task.feedback ?? []).filter((item) => !item.resolvedAt);
+    if (unresolved.length > 0) {
+      await runtime.markWaitingInput(
+        `Engineer feedback is unresolved: ${unresolved.map((item) => item.message).join(" | ")}`,
+      );
+      return;
+    }
     if (!task.changePackage) {
       const hypothesis = [...task.state.hypotheses].reverse().find((h) => h.status !== "rejected");
       try {
@@ -441,6 +555,9 @@ export class ForgePilotHarness {
   private async runPublish(runtime: TaskRuntime): Promise<void> {
     const task = await runtime.reload();
     if (!task.changePackage) throw new Error("Cannot publish without a change package");
+    if ((task.feedback ?? []).some((item) => !item.resolvedAt)) {
+      throw new Error("Cannot publish while engineer feedback is unresolved.");
+    }
     if (!task.changePackage.approvedAt) {
       if (!this.config.autoApprove) {
         await runtime.update((draft) => {

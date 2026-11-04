@@ -11,9 +11,12 @@
 ```bash
 cd D:/workfile/forgepilot
 npm install
-npm test              # 13 个确定性测试，不调用模型
+npm test              # 19 个确定性测试，不调用模型
+npm run ui            # Web 工作台：http://127.0.0.1:4310
 npm run demo:fix      # 真实模型跑一次 Bug 修复 → 测试 → 审批 → 分支/PR
 npm run demo:fault    # 故障注入：PR 已创建但响应丢失，恢复后不重复创建
+npm run demo:review-chat    # GitHub issue → 修复 → 审核对话 → 通过 → PR
+npm run demo:review-changes # 审核时要求修改 → 回到 REPAIR → 重新验证 → 再审批
 npm run demo:review   # PR Review 离线评估（启发式 Judge）
 npm run demo:review -- --llm   # 独立 LLM Judge
 npm run demo:swebench -- --limit 2  # baseline / 检索增强双臂对照
@@ -55,7 +58,55 @@ QUEUED / RUNNING / WAITING_INPUT / WAITING_APPROVAL /
 PAUSED / CANCELLING / CANCELLED / FAILED / DELIVERED
 ```
 
-## 3. 四条亮点的代码落点
+## 3. 审核对话与 Web 工作台
+
+修复完成后任务进入 `PACKAGE / WAITING_APPROVAL`。工程师可以在工作台里直接和 Agent 对话，问：
+
+- 为什么用 `Math.ceil` 而不是保留 `floor + 1`？
+- 非整除、`total=0`、非法入参会不会受影响？
+- 你验证了什么？给出测试证据和代码位置。
+- 这个改动还有哪些残留风险？
+
+实现是**只读 Review Chat**：
+
+- 工具白名单只有 `read/grep/find/ls/read_artifact/get_change_summary/get_task_status/get_pr_status`；
+- 不能改码、改测试、推分支或创建 PR；
+- 回答必须引用当前 diff、验证记录、`file:line` 或 artifact；
+- 对话历史和 patch 指纹一起持久化在 `tasks/<id>/review-chat.jsonl`；
+- 审核对话的 Token 计入 metrics，但不消耗修复阶段的 Token/工具调用预算，避免“问几个问题就没预算改码”。
+
+工作台还支持：
+
+- **通过并创建 PR**：人工审批后 Harness 推送分支、创建/核对 PR；
+- **要求修改**：把对话输入作为审核意见写回任务，清空旧变更包，回到 `REPAIR`，重新验证、重新打包；未解决意见会阻止审批；
+- **取消任务**：进入 `CANCELLING`，abort 当前执行并核对在途操作。
+
+启动：
+
+```bash
+npm run ui
+# 浏览器打开 http://127.0.0.1:4310
+```
+
+左侧从 GitHub issue fixture 创建任务，执行完成后在“评审对话”页提问；右侧可查看概览、diff、验证证据和交付状态。当前是轻量原生 Web 工作台，React 版本可以后续替换。
+
+### GitHub issue 输入
+
+本地演示：
+
+```bash
+npm run dev -- fix --issue fixtures/github/issue-101.json
+```
+
+真实 URL（需要 `GITHUB_TOKEN`，并在 `fixtures/github/projects.json` 配置仓库到授权模板/可信命令的映射）：
+
+```bash
+npm run dev -- fix --issue https://github.com/example/course-service/issues/101
+```
+
+Issue 文本只作为任务资料，不能决定仓库、命令或权限；仓库映射和验证命令来自可信项目配置。
+
+## 4. 四条亮点的代码落点
 
 | 简历亮点 | 实现位置 | 关键机制 |
 | --- | --- | --- |
@@ -114,7 +165,7 @@ Demo 中 `run-a` 得到 `TP=3, FP=1, FN=1, Undecided=1, P=0.750, R=0.750`；`run
 - 成本包含成功与失败尝试，报告平均输入/输出 Token、工具调用、墙钟时间；
 - 本地 verifier 与官方 SWE-bench Docker Harness 接口兼容，但本仓库跑出的数字不是官方排行榜结果。
 
-## 4. 目录
+## 5. 目录
 
 ```text
 src/
@@ -122,19 +173,21 @@ src/
   context/         分层上下文组装
   domain/          阶段/生命周期/预算/数据模型
   harness/         编排器、运行时、恢复/幂等/发布
-  integrations/    Git、PR、工单、验证命令
-  store/           Task/Artifact/Operation/Checkpoint/Verification/Lease/Event
+  integrations/    Git、PR、GitHub issue、工单、验证命令
+  review/          只读审核对话（prompt + service）
+  store/           Task/Artifact/Operation/Checkpoint/Verification/Lease/Event/ReviewChat
   eval/review/     Review 评估
   eval/swebench/   SWE-bench 双臂评估
+  web/             Web 工作台（Node HTTP + 静态 UI + SSE）
   cli.ts
-fixtures/          示例仓库、工单、Review 标签、SWE-bench 实例
+fixtures/          示例仓库、GitHub issue、工单、Review 标签、SWE-bench 实例
 scripts/           demo 脚本
 tests/             确定性测试
 docs/design.md     详细设计
 docs/demo-evidence.md  本地真实运行证据与口径
 ```
 
-## 5. 与 pi-agent SDK 的关系
+## 6. 与 pi-agent SDK 的关系
 
 - 运行时固定 `@earendil-works/pi-coding-agent@1.4.0`（skill 基线版本）。
 - 系统提示词完全替换 pi 默认人设；`noSkills/noContextFiles` 关闭无关注入。
@@ -144,7 +197,7 @@ docs/demo-evidence.md  本地真实运行证据与口径
 - 结束信号使用 `agent_settled`，不是 `agent_end`。
 - 一个阶段一个 session；跨阶段恢复靠结构化状态与制品，不靠聊天记录。
 
-## 6. 真实与模拟边界
+## 7. 真实与模拟边界
 
 **真实执行**
 
@@ -152,26 +205,28 @@ docs/demo-evidence.md  本地真实运行证据与口径
 - 真实测试、构建、复现命令；
 - 真实模型调用与 Token 统计；
 - 真实 LLM Judge（`--llm`）；
+- 真实审核对话（Review Chat，只读工具 + SSE 流式）；
 - 真实本地 SWE-bench 风格的隐藏测试判定。
 
 **本地适配器（面试时可替换为生产实现）**
 
-- 工单系统：本地 JSON（`fixtures/tickets/`），可替换为 Jira/云效适配器；
+- 工单系统：本地 JSON（`fixtures/tickets/`、`fixtures/github/`），可替换为 Jira/云效/GitHub API 适配器；
 - 代码托管：本地 PR 记录（`local://pr/...`），可替换为 GitLab/Codeup API；
 - 工作区：模板复制 + git init，可替换为 `git worktree` / 容器沙箱（已保留 `prepareExistingRepoWorktree`）；
 - 存储：文件 + 原子写 + sha256 制品，可替换为 Postgres + 对象存储；
 - 评估：本地 verifier，可替换为官方 SWE-bench Docker Harness。
 
-## 7. 已知限制
+## 8. 已知限制
 
-- 没有 React 工作台，当前是 CLI + JSON/Markdown 报告。
+- Web 工作台是原生 HTML/JS + SSE，不是 React；React 版本可后续替换。
+- 审核对话是只读的；要求改码必须走“要求修改”回退 REPAIR，不能在对话里直接 patch。
 - 没有 Docker/容器级隔离；真实部署应把执行面放进一次性沙箱。
 - 文件存储在单机并发下可用，跨节点需要数据库 CAS/租约。
 - 隐藏测试的本地 verifier 是简化版；官方 SWE-bench 需要 Docker harness 与数据集 revision 固定。
 - 代码是 TS 运行时。简历里的 Python/React 控制面可以作为后续包装层；本仓库不声称它是生产控制面。
 - 简历中的 500+ 工程师、71 个 Bug、178→53 分钟是业务口径；本仓库只产出机制与可回放证据，不复现这些业务数字。
 
-## 8. 测试
+## 9. 测试
 
 ```bash
 npm test
@@ -180,12 +235,14 @@ npm test
 覆盖：
 
 - Task CAS、租约 epoch、操作幂等；
+- 审核对话持久化、只读 prompt 上下文、要求修改回退、审批门禁、Review 预算隔离；
 - 上下文预算压缩、约束保留、工具配对完整、制品回读；
 - Review 一对一匹配、P/R、未决项、回放对比；
 - 补丁落盘后崩溃恢复、PR 响应丢失恢复、验证指纹失效；
 - `git diff` 指纹跨 commit 稳定、changedFiles 路径正确；
-- SWE-bench 双臂执行、隐藏测试后置、空补丁不判 resolved。
+- SWE-bench 双臂执行、隐藏测试后置、空补丁不判 resolved；
+- Web 工作台静态页面与任务/Issue API。
 
-## 9. 面试一句话
+## 10. 面试一句话
 
 > ForgePilot 不是让模型直接接管研发流程，而是把 Bug 修复放进可控闭环：固定代码版本，由 Agent 定位和改码，由 Harness 验证、绑定证据、等待人工审批，再交付带验证记录的 PR。技术上重点解决长上下文不丢约束、任务中断不重复副作用，以及用两套离线评估分别检验 Review 质量和修复效果。

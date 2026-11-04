@@ -15,7 +15,11 @@ export async function loadTicket(projectRoot: string, ticketFile: string): Promi
   const absolute = path.isAbsolute(ticketFile) ? ticketFile : path.resolve(projectRoot, ticketFile);
   const ticket = await readJson<Ticket>(absolute);
   if (!ticket) throw new Error(`Ticket not found: ${ticketFile}`);
-  if (!ticket.ticketId || !ticket.description) throw new Error(`Invalid ticket: ${ticketFile}`);
+  return normalizeTicket(projectRoot, ticket, ticketFile);
+}
+
+export function normalizeTicket(projectRoot: string, ticket: Ticket, source = "ticket"): LoadedTicket {
+  if (!ticket.ticketId || !ticket.description) throw new Error(`Invalid ticket: ${source}`);
   const templatePath = ticket.repoTemplate
     ? path.isAbsolute(ticket.repoTemplate)
       ? ticket.repoTemplate

@@ -145,30 +145,36 @@ export class TaskRuntime {
     }
   }
 
-  async addUsage(usage: { input: number; output: number; cacheRead: number }): Promise<void> {
+  async addUsage(
+    usage: { input: number; output: number; cacheRead: number },
+    options: { countAgainstBudget?: boolean } = {},
+  ): Promise<void> {
+    const against = options.countAgainstBudget !== false;
     await this.update((draft) => {
       draft.metrics.llmCalls += 1;
       draft.metrics.inputTokens += usage.input;
       draft.metrics.outputTokens += usage.output;
       draft.metrics.cacheReadTokens += usage.cacheRead;
-      draft.budget.tokensUsed += usage.input + usage.output + usage.cacheRead;
+      if (against) draft.budget.tokensUsed += usage.input + usage.output + usage.cacheRead;
       draft.budget.elapsedMs = Date.now() - draft.budget.startedAt;
     });
   }
 
-  async countToolCall(toolName: string): Promise<void> {
+  async countToolCall(toolName: string, countAgainstBudget = true): Promise<void> {
     await this.update((draft) => {
-      draft.budget.toolCallsUsed += 1;
+      if (countAgainstBudget) draft.budget.toolCallsUsed += 1;
       draft.metrics.toolCalls += 1;
       draft.budget.elapsedMs = Date.now() - draft.budget.startedAt;
-      draft.state.attempts.push({
-        id: `A-${Date.now()}-${shortHash(toolName, 4)}`,
-        action: `tool:${toolName}`,
-        result: "unknown",
-        detail: "started",
-        at: Date.now(),
-      });
-      if (draft.state.attempts.length > 80) draft.state.attempts.shift();
+      if (countAgainstBudget) {
+        draft.state.attempts.push({
+          id: `A-${Date.now()}-${shortHash(toolName, 4)}`,
+          action: `tool:${toolName}`,
+          result: "unknown",
+          detail: "started",
+          at: Date.now(),
+        });
+        if (draft.state.attempts.length > 80) draft.state.attempts.shift();
+      }
     });
   }
 
@@ -417,6 +423,12 @@ export class TaskRuntime {
   }
 
   async packageChange(rationale: string): Promise<ChangePackage> {
+    const unresolved = (this.task.feedback ?? []).filter((item) => !item.resolvedAt);
+    if (unresolved.length > 0) {
+      throw new Error(
+        `Engineer feedback is still unresolved: ${unresolved.map((item) => item.message).join(" | ")}`,
+      );
+    }
     const { diff, patchHash, diffStat, changedFiles } = await this.currentDiff();
     if (!diff.trim()) throw new Error("No patch to package. Apply a change first.");
     const verifications = await this.stores.verifications.list(this.task.id);
@@ -473,6 +485,10 @@ export class TaskRuntime {
     const task = await this.reload();
     if (!task.changePackage) throw new Error("No change package to approve");
     if (task.stage !== "PACKAGE") throw new Error(`Cannot approve in stage ${task.stage}`);
+    const unresolved = (task.feedback ?? []).filter((item) => !item.resolvedAt);
+    if (unresolved.length > 0) {
+      throw new Error(`Cannot approve: engineer feedback is unresolved (${unresolved.length} item(s)).`);
+    }
     return this.update((draft) => {
       draft.changePackage!.approvedAt = Date.now();
       draft.stage = "PUBLISH";

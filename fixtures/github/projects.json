@@ -1,0 +1,18 @@
+{
+  "example/course-service": {
+    "projectId": "course-platform",
+    "repoName": "demo-course-service",
+    "repoTemplate": "fixtures/demo-repo",
+    "expected": "total=40、pageSize=20 返回 2 页；非整除仍向上取整；total=0 返回 0 页。",
+    "commands": {
+      "repro": "node scripts/repro-pagination.js",
+      "test": "node --test tests/pagination.test.js",
+      "build": "node -e \"import('./src/pagination.js').then((m) => { if (typeof m.totalPages !== 'function') process.exit(1); console.log('build ok'); })\""
+    },
+    "constraints": {
+      "protectedPaths": ["tests/**", "scripts/**"],
+      "notes": ["Only change source code under src/.", "Do not modify tests or verification configuration."],
+      "acceptance": ["totalPages(40, 20) === 2", "totalPages(41, 20) === 3", "totalPages(0, 20) === 0"]
+    }
+  }
+}

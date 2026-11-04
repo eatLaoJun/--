@@ -11,6 +11,9 @@ export interface HarnessExtensionOptions {
   stage: Stage;
   allowedTools: string[];
   assembler: ContextAssembler;
+  systemPromptText?: string;
+  allowWaiting?: boolean;
+  countAgainstBudget?: boolean;
   onContextMetrics?: (metrics: ContextMetrics) => void;
   onToolCall?: (name: string, input: unknown) => void;
 }
@@ -27,7 +30,9 @@ export function createHarnessExtension(options: HarnessExtensionOptions): Extens
     pi.on("before_agent_start", (event) => {
       if (event.messageType !== "user") return;
       return {
-        systemPrompt: buildSystemPrompt(options.runtime.task, options.stage, options.allowedTools),
+        systemPrompt:
+          options.systemPromptText ??
+          buildSystemPrompt(options.runtime.task, options.stage, options.allowedTools),
       };
     });
 
@@ -71,15 +76,21 @@ export function createHarnessExtension(options: HarnessExtensionOptions): Extens
         if (task.cancelRequested || task.lifecycle === "CANCELLING" || task.lifecycle === "CANCELLED") {
           return { block: true, reason: "Task was cancelled; no further side effects are allowed." };
         }
-        if (task.lifecycle !== "RUNNING") {
+        if (!options.allowWaiting && task.lifecycle !== "RUNNING") {
           return { block: true, reason: `Task lifecycle is ${task.lifecycle}; tools are not allowed.` };
         }
-        if (task.budget.toolCallsUsed >= task.budget.maxToolCalls) {
+        if (
+          options.allowWaiting &&
+          !["RUNNING", "WAITING_APPROVAL", "WAITING_INPUT", "PAUSED", "DELIVERED"].includes(task.lifecycle)
+        ) {
+          return { block: true, reason: `Task lifecycle is ${task.lifecycle}; read-only review tools are not allowed.` };
+        }
+        if (options.countAgainstBudget !== false && task.budget.toolCallsUsed >= task.budget.maxToolCalls) {
           return { block: true, reason: "Tool call budget exhausted; stop and report the blocker." };
         }
         const pathError = validateToolPaths(ctx, event.input);
         if (pathError) return { block: true, reason: pathError };
-        await options.runtime.countToolCall(event.toolName);
+        await options.runtime.countToolCall(event.toolName, options.countAgainstBudget !== false);
         options.onToolCall?.(event.toolName, event.input);
         return undefined;
       } catch (err) {

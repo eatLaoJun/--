@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ForgePilot · Bug 修复与评审</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">FP</div>
+          <div>
+            <h1>ForgePilot</h1>
+            <p>Bug 修复 · 评审对话</p>
+          </div>
+        </div>
+
+        <div class="create-box">
+          <label for="issue-select">从 GitHub Issue 创建修复任务</label>
+          <select id="issue-select"></select>
+          <button id="create-task" class="primary">开始修复</button>
+          <p class="hint">本地演示使用 fixtures/github 中的 issue；配置 GITHUB_TOKEN 后可填入真实 URL。</p>
+        </div>
+
+        <div class="list-head">
+          <span>任务</span>
+          <button id="refresh" class="link">刷新</button>
+        </div>
+        <div id="task-list" class="task-list"></div>
+      </aside>
+
+      <main class="main">
+        <div id="empty" class="empty">
+          <div class="empty-icon">⌁</div>
+          <h2>选择一个任务，或从 Issue 开始</h2>
+          <p>Agent 会先修复并验证，然后等待你的审核。你可以直接问它“为什么这样改”。</p>
+        </div>
+
+        <div id="detail" hidden>
+          <header class="detail-head">
+            <div class="title-area">
+              <div id="issue-link" class="eyebrow"></div>
+              <h2 id="task-title"></h2>
+              <div id="task-meta" class="meta"></div>
+            </div>
+            <div class="actions">
+              <button id="approve-btn" class="primary">通过并创建 PR</button>
+              <button id="changes-btn" class="warn">要求修改</button>
+              <button id="cancel-btn" class="ghost">取消任务</button>
+            </div>
+          </header>
+
+          <div id="statusbar" class="statusbar"></div>
+
+          <nav class="tabs">
+            <button data-tab="overview" class="active">概览</button>
+            <button data-tab="diff">变更</button>
+            <button data-tab="evidence">证据</button>
+            <button data-tab="chat">评审对话 <span id="chat-count" class="count"></span></button>
+          </nav>
+
+          <section id="tab-overview" class="tab-panel"></section>
+          <section id="tab-diff" class="tab-panel" hidden></section>
+          <section id="tab-evidence" class="tab-panel" hidden></section>
+          <section id="tab-chat" class="tab-panel chat-panel" hidden>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="composer">
+              <textarea id="chat-input" rows="3" placeholder="问点具体的：为什么用 Math.ceil？这个改动会影响非整除场景吗？"></textarea>
+              <div class="composer-actions">
+                <span class="hint">Enter 发送 · Shift+Enter 换行</span>
+                <button id="send-btn" class="primary">发送</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div id="toast" class="toast"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

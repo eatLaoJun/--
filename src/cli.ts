@@ -8,6 +8,8 @@ import { evaluateReviewRun, compareEvaluations, formatReviewReport } from "./eva
 import { createJudge } from "./eval/review/judge.js";
 import { createModelContext } from "./agent/session.js";
 import { runSwebenchEvaluation } from "./eval/swebench/run.js";
+import { startWebServer } from "./web/server.js";
+import { createInterface } from "node:readline/promises";
 import type { EvaluationResult } from "./eval/review/types.js";
 import { readJson } from "./utils/paths.js";
 
@@ -70,10 +72,13 @@ async function main(): Promise<void> {
     });
     let taskId = str(flags, "task");
     if (!taskId) {
-      const ticket = str(flags, "ticket", "fixtures/tickets/T-1001.json")!;
-      const created = await harness.createTaskFromTicket(ticket);
+      const issue = str(flags, "issue");
+      const created = issue
+        ? await harness.createTaskFromIssue(issue)
+        : await harness.createTaskFromTicket(str(flags, "ticket", "fixtures/tickets/T-1001.json")!);
       taskId = created.task.id;
       console.log(`created ${taskId} (base ${created.task.baseCommit?.slice(0, 12)}, branch ${created.task.branch})`);
+      if (created.task.issueUrl) console.log(`issue: ${created.task.issueUrl}`);
     }
     const result = await harness.run(taskId);
     printTaskResult(result.task, result.contextMetrics.length, result.recoveryNotes);
@@ -105,6 +110,69 @@ async function main(): Promise<void> {
     if (!taskId) throw new Error("cancel requires a task id");
     const harness = new ForgePilotHarness({ root, projectRoot, autoApprove: false });
     await harness.cancel(taskId);
+    const result = await harness.run(taskId);
+    printTaskResult(result.task, result.contextMetrics.length, result.recoveryNotes);
+    return;
+  }
+
+  if (command === "serve") {
+    const web = await startWebServer({
+      projectRoot,
+      root,
+      port: Number(str(flags, "port", "4310")),
+      host: str(flags, "host", "127.0.0.1"),
+      model: str(flags, "model"),
+    });
+    console.log(`ForgePilot workbench: ${web.url}`);
+    console.log("Ctrl+C to stop.");
+    process.on("SIGINT", async () => {
+      await web.close();
+      process.exit(0);
+    });
+    await new Promise<void>(() => undefined);
+    return;
+  }
+
+  if (command === "chat") {
+    const taskId = positional[0] ?? str(flags, "task");
+    if (!taskId) throw new Error("chat requires a task id");
+    const harness = new ForgePilotHarness({ root, projectRoot, autoApprove: false, model: str(flags, "model") });
+    const task = await harness.getTask(taskId);
+    if (!task) throw new Error(`Task not found: ${taskId}`);
+    console.log(`review chat · ${task.ticketId} · ${task.stage}/${task.lifecycle}`);
+
+    const ask = async (message: string) => {
+      process.stdout.write("ForgePilot> ");
+      const result = await harness.askReview(taskId, message, (delta) => process.stdout.write(delta));
+      process.stdout.write("\n");
+      return result.answer;
+    };
+
+    const oneShot = str(flags, "message");
+    if (oneShot) {
+      await ask(oneShot);
+      return;
+    }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      while (true) {
+        const line = (await rl.question("\n工程师> ")).trim();
+        if (!line) continue;
+        if (["exit", "quit", ":q"].includes(line.toLowerCase())) break;
+        await ask(line);
+      }
+    } finally {
+      rl.close();
+    }
+    return;
+  }
+
+  if (command === "changes") {
+    const taskId = positional[0] ?? str(flags, "task");
+    const message = str(flags, "message");
+    if (!taskId || !message) throw new Error("changes requires a task id and --message");
+    const harness = new ForgePilotHarness({ root, projectRoot, autoApprove: false, model: str(flags, "model") });
+    await harness.requestChanges(taskId, message, { start: false });
     const result = await harness.run(taskId);
     printTaskResult(result.task, result.contextMetrics.length, result.recoveryNotes);
     return;
@@ -197,7 +265,10 @@ function printTaskResult(
 function printHelp(): void {
   console.log(`ForgePilot CLI
 
-  fix --ticket <file> [--auto-approve] [--task <id>] [--fault <name>] [--model provider/id]
+  serve [--port 4310] [--host 127.0.0.1] [--model provider/id]
+  fix --ticket <file> | --issue <github-issue-url-or-fixture> [--auto-approve] [--task <id>] [--fault <name>]
+  chat <taskId> [--message "..."] [--model provider/id]
+  changes <taskId> --message "请改成 ..."
   status <taskId>
   approve <taskId>
   cancel <taskId>

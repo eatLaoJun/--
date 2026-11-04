@@ -1,0 +1,37 @@
+{
+  "issue": {
+    "number": 101,
+    "title": "课程列表在记录数整除时多出一页",
+    "body": "课程列表返回 total=40、pageSize=20 时显示 3 页，但第 3 页为空。请在修复后附上测试证据。",
+    "html_url": "https://github.com/example/course-service/issues/101",
+    "labels": ["bug", "pagination"]
+  },
+  "ticket": {
+    "ticketId": "GH-101",
+    "projectId": "course-platform",
+    "title": "课程列表在记录数整除时多出一页",
+    "description": "GitHub issue #101：课程列表返回 total=40、pageSize=20 时显示 3 页，但第 3 页为空；整除场景都会出现一个空页。",
+    "expected": "total=40、pageSize=20 返回 2 页；非整除仍向上取整；total=0 返回 0 页。",
+    "repoName": "demo-course-service",
+    "repoTemplate": "fixtures/demo-repo",
+    "commands": {
+      "repro": "node scripts/repro-pagination.js",
+      "test": "node --test tests/pagination.test.js",
+      "build": "node -e \"import('./src/pagination.js').then((m) => { if (typeof m.totalPages !== 'function') process.exit(1); console.log('build ok'); })\""
+    },
+    "constraints": {
+      "protectedPaths": ["tests/**", "scripts/**"],
+      "notes": [
+        "Only change source code under src/.",
+        "Do not modify tests, the reproduction script or verification configuration."
+      ],
+      "acceptance": [
+        "totalPages(40, 20) === 2",
+        "totalPages(20, 20) === 1",
+        "totalPages(41, 20) === 3",
+        "totalPages(0, 20) === 0"
+      ]
+    },
+    "budget": { "maxTokens": 120000, "maxToolCalls": 40, "maxWallClockMs": 600000, "maxRepairIterations": 3 }
+  }
+}

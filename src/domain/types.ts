@@ -64,6 +64,14 @@ export interface Hypothesis {
   at: number;
 }
 
+export interface HumanFeedback {
+  id: string;
+  message: string;
+  priorPatchHash?: string;
+  requestedAt: number;
+  resolvedAt?: number;
+}
+
 export interface Attempt {
   id: string;
   action: string;
@@ -155,6 +163,9 @@ export interface Task {
   /** Latest content hash of the workspace diff relative to base_commit. */
   patchHash?: string;
   branch: string;
+  /** Optional source metadata for an issue-driven task. */
+  issueUrl?: string;
+  issueNumber?: number;
   stage: Stage;
   lifecycle: Lifecycle;
   version: number;
@@ -165,6 +176,7 @@ export interface Task {
   constraints: TaskConstraints;
   commands: Record<string, string>;
   state: TaskState;
+  feedback?: HumanFeedback[];
   changePackage?: ChangePackage;
   pr?: PrRecord;
   lease?: Lease;
@@ -185,6 +197,8 @@ export interface Ticket {
   expected: string;
   repoName: string;
   repoTemplate?: string;
+  issueUrl?: string;
+  issueNumber?: number;
   commands: Record<string, string>;
   constraints?: Partial<TaskConstraints>;
   budget?: Partial<Budget>;

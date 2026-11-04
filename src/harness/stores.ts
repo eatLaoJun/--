@@ -6,6 +6,7 @@ import { LeaseManager } from "../store/lease.js";
 import { OperationStore } from "../store/operation-store.js";
 import { TaskStore } from "../store/task-store.js";
 import { LocalPrAdapter } from "../integrations/pr.js";
+import { ReviewChatStore } from "../store/review-chat-store.js";
 
 export interface HarnessStores {
   tasks: TaskStore;
@@ -16,6 +17,7 @@ export interface HarnessStores {
   events: EventLog;
   leases: LeaseManager;
   pr: LocalPrAdapter;
+  reviewChat: ReviewChatStore;
 }
 
 export function createStores(root: string): HarnessStores {
@@ -29,5 +31,6 @@ export function createStores(root: string): HarnessStores {
     events: new EventLog(root),
     leases: new LeaseManager(tasks),
     pr: new LocalPrAdapter(path.join(root, "prs")),
+    reviewChat: new ReviewChatStore(root),
   };
 }
