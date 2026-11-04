@@ -7,7 +7,7 @@ import type { ReviewMessage } from "../store/review-chat-store.js";
 import { GitWorkspace } from "../integrations/git.js";
 import { buildReviewPrompt, buildReviewSystemPrompt } from "./prompt.js";
 import { truncate } from "../utils/text.js";
-import type { AgentStreamEvent, ToolTrace } from "../agent/stream-events.js";
+import type { AgentStreamEvent, ToolTrace } from "../agent/ui-events.js";
 
 export const REVIEW_TOOLS = [
   "read",
@@ -80,6 +80,9 @@ export class ReviewChatService {
         systemPromptText: buildReviewSystemPrompt(task),
         allowWaiting: true,
         countAgainstBudget: false,
+        // Review chat is not part of the execution budget; give it a separate timeout
+        // so an old task's elapsed time cannot abort a long review answer.
+        wallClockMs: 180_000,
         recordAttempt: false,
         onText: onDelta,
         onStreamEvent: (event) => {

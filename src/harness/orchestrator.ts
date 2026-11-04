@@ -17,7 +17,7 @@ import { oneLine, sha256, shortHash } from "../utils/text.js";
 import { OperationInFlightError } from "../store/operation-store.js";
 import { ReviewChatService } from "../review/service.js";
 import type { ReviewMessage } from "../store/review-chat-store.js";
-import type { AgentStreamEvent } from "../agent/stream-events.js";
+import type { AgentStreamEvent } from "../agent/ui-events.js";
 
 export interface RunResult {
   task: Task;

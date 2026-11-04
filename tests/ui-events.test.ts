@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizeToolInput, summarizeToolResult } from "../src/agent/stream-events.js";
+import { summarizeToolInput, summarizeToolResult } from "../src/agent/ui-events.js";
 
 test("tool result summaries are flattened and bounded", () => {
   assert.equal(

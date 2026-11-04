@@ -14,8 +14,8 @@ import { buildSystemPrompt } from "./prompt.js";
 import { createHarnessExtension } from "./extension.js";
 import { createHarnessTools } from "./tools/index.js";
 import { oneLine } from "../utils/text.js";
-import type { AgentStreamEvent } from "./stream-events.js";
-import { summarizeToolInput, summarizeToolResult } from "./stream-events.js";
+import type { AgentStreamEvent } from "./ui-events.js";
+import { fromAssistantStreamEvent, fromToolEndEvent, fromToolStartEvent, fromToolUpdateEvent } from "./ui-events.js";
 
 export interface ModelContext {
   runtime: ModelRuntime;
@@ -60,6 +60,8 @@ export interface PiStageRunOptions {
   systemPromptText?: string;
   allowWaiting?: boolean;
   countAgainstBudget?: boolean;
+  /** Wall-clock timeout for this session. Defaults to the task's remaining budget. */
+  wallClockMs?: number;
   recordAttempt?: boolean;
   onContextMetrics?: (metrics: ContextMetrics) => void;
   onToolCall?: (name: string, input: unknown) => void;
@@ -151,16 +153,9 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
     }
     if (event.type === "message_update") {
       const update = event.assistantMessageEvent;
-      if (update.type === "text_delta") {
-        options.onText?.(update.delta);
-        options.onStreamEvent?.({ type: "text_delta", text: update.delta });
-      } else if (update.type === "thinking_start") {
-        options.onStreamEvent?.({ type: "thinking_start" });
-      } else if (update.type === "thinking_delta") {
-        options.onStreamEvent?.({ type: "thinking_delta", text: update.delta });
-      } else if (update.type === "thinking_end") {
-        options.onStreamEvent?.({ type: "thinking_end", text: update.content });
-      }
+      if (update.type === "text_delta") options.onText?.(update.delta);
+      const mapped = fromAssistantStreamEvent(update);
+      if (mapped) options.onStreamEvent?.(mapped);
       return;
     }
     if (event.type === "message_end" && event.message.role === "assistant") {
@@ -192,45 +187,30 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
     }
     if (event.type === "tool_execution_start") {
       toolCalls += 1;
-      options.onStreamEvent?.({
-        type: "tool_start",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        input: summarizeToolInput(event.args),
-      });
+      options.onStreamEvent?.(fromToolStartEvent(event));
       return;
     }
     if (event.type === "tool_execution_update") {
-      options.onStreamEvent?.({
-        type: "tool_update",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        text: summarizeToolResult(event.partialResult, 160),
-      });
+      options.onStreamEvent?.(fromToolUpdateEvent(event));
       return;
     }
     if (event.type === "tool_execution_end") {
-      options.onStreamEvent?.({
-        type: "tool_end",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        isError: event.isError,
-        durationMs: event.durationMs,
-        summary: summarizeToolResult(event.result),
-      });
+      options.onStreamEvent?.(fromToolEndEvent(event));
       return;
     }
     if (event.type === "agent_settled") {
-      if (event.aborted) abortReason = "aborted";
+      if (event.aborted && !abortReason) abortReason = "aborted";
       options.onStreamEvent?.({ type: "settled", aborted: event.aborted });
     }
   });
 
+  const remainingBudgetMs = task.budget.maxWallClockMs - (Date.now() - task.budget.startedAt);
+  const wallClockMs = options.wallClockMs ?? Math.max(10_000, remainingBudgetMs);
   const abortTimer = setTimeout(() => {
     if (!session) return;
     abortReason = "wall-clock budget";
     void session.abort();
-  }, Math.max(10_000, task.budget.maxWallClockMs - (Date.now() - task.budget.startedAt)));
+  }, wallClockMs);
 
   try {
     await runtime.ensureNotCancelled();

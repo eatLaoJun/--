@@ -254,8 +254,11 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | 可审计 | 对话追加到 `tasks/<id>/review-chat.jsonl`，带角色、时间、模型、patchHash |
 | 过程可见 | `thinking_start/delta/end` 与 `tool_execution_start/update/end` 通过 SSE 推给工作台；回答结束后持久化工具 trace 摘要 |
 | 预算隔离 | 对话 usage 进入 metrics，但不增加 `budget.tokensUsed/toolCallsUsed`，避免耗尽修复预算 |
+| 独立超时 | Review Chat 用 180s wall clock，不复用任务的剩余执行时间；避免旧任务 elapsed 让 session 在 10s 后 abort |
 
 `get_change_summary` 是可复用的只读工具：返回当前 patch、diffStat、验证记录、PR 和未解决 feedback，保证回答不是靠模型记忆。
+
+事件层：pi 提供 `AssistantMessageEvent`（provider 级 thinking/text/toolcall delta）和 `AgentSessionEvent`（`tool_execution_*` 等 loop 事件），两者形状不同且包含 partial/usage 等大字段。`src/agent/ui-events.ts` 用 pi 类型做输入，映射成稳定的 UI/SSE 契约，不重新实现流式解析。
 
 ### 8.3 “要求修改”闭环
 

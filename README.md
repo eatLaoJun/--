@@ -197,6 +197,8 @@ docs/demo-evidence.md  本地真实运行证据与口径
 - 工具白名单按阶段设置；`bash/powershell/edit/write` 永久禁用，改码只走 `apply_patch`。
 - 业务持久化用 `SessionManager.inMemory()` + 自己的 TaskStore/Checkpoint，不依赖 pi 的会话目录。
 - 结束信号使用 `agent_settled`，不是 `agent_end`。
+- 事件类型直接复用 pi 的 `AssistantMessageEvent`、`ToolExecutionStart/Update/EndEvent`、`AgentSessionEvent`；`src/agent/ui-events.ts` 只是 UI/SSE 传输适配器（裁剪字段、序列化参数、摘要工具结果），不是重写 pi 的 stream。
+- Review Chat 使用独立 180s wall clock；不会因为任务本身的旧 `elapsed` 已耗尽而在 10s 后 abort。
 - 一个阶段一个 session；跨阶段恢复靠结构化状态与制品，不靠聊天记录。
 
 ## 7. 真实与模拟边界

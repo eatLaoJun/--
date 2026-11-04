@@ -143,7 +143,7 @@ async function main(): Promise<void> {
 
     const showTrace = !bool(flags, "no-trace");
     let thinkingOpen = false;
-    const trace = (event: import("./agent/stream-events.js").AgentStreamEvent) => {
+    const trace = (event: import("./agent/ui-events.js").AgentStreamEvent) => {
       if (!showTrace) return;
       if (event.type === "thinking_delta") {
         if (!thinkingOpen) {
