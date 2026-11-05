@@ -96,7 +96,24 @@ QUEUED → RUNNING → WAITING_APPROVAL → RUNNING → DELIVERED
 - 压缩只影响本次请求，不修改持久化历史；
 - 内置 compaction 只作为 overflow 兜底，不承担结构化状态保存。
 
-### 4.3 为什么摘要不够
+### 4.3 context_metrics 怎么读
+
+`context_metrics` 记录的是“这次请求的上下文估算大小”，不是账单：
+
+| 字段 | 含义 |
+| --- | --- |
+| `beforeTokens` | 进入组装前的消息估算 token |
+| `afterTokens` | 组装后真正发给模型的上下文估算 token（含状态块/摘要/近期消息） |
+| `stateTokens` / `digestTokens` / `recentTokens` | 状态块、历史摘要、近期窗口各自占用 |
+| `summarizedMessages` | 被折叠进摘要的历史消息数 |
+| `offloadedToolOutputs` | 被替换为 artifact 引用的大工具输出数 |
+| `preservedToolPairs` | 保留下来的 tool_call ↔ tool_result 配对数 |
+| `droppedMessages` | 因预算被硬裁掉的消息数 |
+| `estimatedSavedTokens` | `beforeTokens - afterTokens`；为负说明本轮状态块开销大于压缩收益 |
+
+短上下文里 `afterTokens > beforeTokens` 很正常：状态块本身有固定开销，且没有触发摘要/外置。只有接近预算才会真正裁剪。实际计费看 `message_end.usage` 和 `Task.metrics`，不是这两个估算值。
+
+### 4.4 为什么摘要不够
 
 摘要是有损的自然语言，容易把“假设”写成“事实”、丢掉验收条件。代码里的做法是：
 

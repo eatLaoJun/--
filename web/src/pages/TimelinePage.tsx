@@ -11,6 +11,13 @@ function summarize(event: EventItem): string {
   switch (event.type) {
     case "tool_call":
       return `${String(detail.name ?? "tool")} ${JSON.stringify(detail.input ?? {}).slice(0, 220)}`;
+    case "agent_turn": {
+      const usage = (detail.usage ?? {}) as { input?: number; output?: number; cacheRead?: number };
+      const tokens = (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0);
+      return `${String(detail.stage ?? "")} · ${String(detail.summary ?? "(no text)")} · ${tokens} tokens · ${String(detail.toolCalls ?? 0)} tools`;
+    }
+    case "tool_result":
+      return `${String(detail.toolName ?? "tool")} ${detail.isError ? "failed" : "ok"} · ${String(detail.durationMs ?? "?")}ms · ${String(detail.summary ?? "")}`;
     case "verification":
       return `${String(detail.kind ?? "")} → exit ${String(detail.exitCode ?? "?")} · patch ${String(detail.fingerprint ?? "").slice(0, 10)}`;
     case "context_metrics":
@@ -38,6 +45,7 @@ function summarize(event: EventItem): string {
 const FILTERS = [
   { value: "all", label: "全部" },
   { value: "tool_call", label: "工具" },
+  { value: "agent_turn", label: "AI turn" },
   { value: "verification", label: "验证" },
   { value: "context_metrics", label: "上下文" },
   { value: "approval", label: "审批/交付" },
@@ -46,8 +54,9 @@ const FILTERS = [
 
 function matchesFilter(event: EventItem, filter: string): boolean {
   if (filter === "all") return true;
-  if (filter === "tool_call") return event.type === "tool_call";
+  if (filter === "tool_call") return event.type === "tool_call" || event.type === "tool_result";
   if (filter === "verification") return event.type === "verification";
+  if (filter === "agent_turn") return event.type === "agent_turn";
   if (filter === "context_metrics") return event.type === "context_metrics";
   if (filter === "approval") return ["changes_requested", "approved", "waiting_approval", "package_created", "branch_published", "pr_created", "delivered"].includes(event.type);
   if (filter === "error") return ["task_failed", "background_run_failed", "cancelled", "recovery"].includes(event.type);

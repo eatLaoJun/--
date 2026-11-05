@@ -56,6 +56,10 @@ export function createHarnessExtension(options: HarnessExtensionOptions): Extens
         offloadedToolOutputs: assembled.metrics.offloadedToolOutputs,
         preservedToolPairs: assembled.metrics.preservedToolPairs,
         droppedMessages: assembled.metrics.droppedMessages,
+        stateTokens: assembled.metrics.stateTokens,
+        digestTokens: assembled.metrics.digestTokens,
+        recentTokens: assembled.metrics.recentTokens,
+        estimatedSavedTokens: assembled.metrics.beforeTokens - assembled.metrics.afterTokens,
         constraintHash: assembled.metrics.constraintHash,
       });
       return { messages: assembled.messages };

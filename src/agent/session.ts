@@ -195,7 +195,17 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
       return;
     }
     if (event.type === "tool_execution_end") {
-      options.onStreamEvent?.(fromToolEndEvent(event));
+      const mapped = fromToolEndEvent(event);
+      options.onStreamEvent?.(mapped);
+      if (mapped.type === "tool_end") {
+        void runtime.event("tool_result", {
+          toolCallId: mapped.toolCallId,
+          toolName: mapped.toolName,
+          isError: mapped.isError,
+          durationMs: mapped.durationMs,
+          summary: mapped.summary,
+        });
+      }
       return;
     }
     if (event.type === "agent_settled") {
@@ -235,6 +245,21 @@ export async function runPiStageAgent(options: PiStageRunOptions): Promise<PiSta
         if (draft.state.attempts.length > 80) draft.state.attempts.shift();
       });
     }
+    await runtime.event("agent_turn", {
+      stage,
+      sessionId: session.sessionId,
+      model: models.name,
+      summary: oneLine(finalText, 900),
+      toolCalls,
+      wallClockMs: Date.now() - started,
+      usage: {
+        input: usage.input,
+        output: usage.output,
+        cacheRead: usage.cacheRead,
+        totalTokens: usage.totalTokens,
+      },
+      aborted: Boolean(abortReason),
+    });
     return {
       finalText,
       usage,

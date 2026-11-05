@@ -16,6 +16,8 @@ export function eventLabel(type: string): string {
     task_created: "任务创建",
     stage_advanced: "阶段推进",
     tool_call: "工具调用",
+    tool_result: "工具结果",
+    agent_turn: "AI turn",
     verification: "验证",
     package_created: "变更包",
     waiting_approval: "等待审批",
@@ -42,6 +44,6 @@ export function eventTone(type: string): string {
   if (["task_failed", "background_run_failed", "cancelled"].includes(type)) return "danger";
   if (["approved", "delivered", "pr_created", "branch_published"].includes(type)) return "success";
   if (["changes_requested", "waiting_approval", "recovery"].includes(type)) return "warn";
-  if (["tool_call", "verification"].includes(type)) return "info";
+  if (["tool_call", "tool_result", "agent_turn", "verification"].includes(type)) return "info";
   return "muted";
 }

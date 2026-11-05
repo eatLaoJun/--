@@ -316,6 +316,13 @@ ModelRuntime.create
 4. `renderDigest` 如何保留证据引用；
 5. `sanitizeToolPairs` 如何去掉孤儿结果。
 
+**context_metrics 不是账单**：
+
+- `beforeTokens / afterTokens` 是请求上下文的估算大小；
+- `after > before` 可能只是状态块开销，不代表新增计费；
+- 实际计费看 `message_end.usage` / `Task.metrics`；
+- `summarizedMessages / offloadedToolOutputs / droppedMessages` 才表示本轮做了压缩动作。
+
 **自测**：
 
 - 为什么“只有摘要”不够？
