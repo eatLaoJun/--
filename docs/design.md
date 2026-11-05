@@ -28,11 +28,34 @@
 
 ## 2. 阶段状态机
 
+事件中心主链路（M1）：
+
 ```text
-PREPARE → REPRODUCE → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE
-             ↑______________________|
-                  验证失败回到 REPAIR
+INGEST → RESOLVE → PLAN → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE
+                    ↑______________|
+                     验证失败回到 REPAIR
 ```
+
+| 阶段 | 执行者 | 产物 |
+| --- | --- | --- |
+| INGEST | 平台 | 事件来源、去重键、service、权限 |
+| RESOLVE | 平台 + 可信项目配置 | repo、base_commit、branch、commands、owners |
+| PLAN | pi Agent（只读） | 结构化 Plan：根因假设、方案、替代方案、文件、测试计划、风险 |
+| REPAIR | pi Agent（可写） | 最小 patch、诊断证据 |
+| VERIFY | Harness + 命令 | 测试/构建结果、指纹、artifact |
+| PACKAGE | Harness | 可审核变更包 |
+| PUBLISH | 平台 | 分支、PR、外部状态核对 |
+| DONE | 平台 | 交付记录 |
+
+旧 ticket 流程 `PREPARE → REPRODUCE → REPAIR ...` 保留用于历史任务兼容。
+
+事件中心入口的关键约束：
+
+- INGEST 只接受来源校验和去重后的 incident；
+- RESOLVE 从 `fixtures/event-center/projects.json` 读取授权映射，模型不能猜仓库；
+- PLAN 只读，不允许 `apply_patch`，必须调用 `record_plan`；
+- REPAIR 读取 Plan，不能无故偏离方案；
+- 每个阶段都可以打开只读 Ask AI，但改状态必须走显式门禁。
 
 生命周期与阶段正交：
 

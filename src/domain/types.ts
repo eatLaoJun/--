@@ -1,4 +1,7 @@
 export const STAGES = [
+  "INGEST",
+  "RESOLVE",
+  "PLAN",
   "PREPARE",
   "REPRODUCE",
   "REPAIR",
@@ -62,6 +65,19 @@ export interface Hypothesis {
   confidence: "low" | "medium" | "high";
   status: "open" | "confirmed" | "rejected";
   at: number;
+}
+
+export interface Plan {
+  rootCauseHypotheses: string[];
+  approach: string;
+  alternatives: string[];
+  filesToChange: string[];
+  testPlan: string[];
+  risks: string[];
+  evidence: string[];
+  status: "draft" | "approved" | "rejected";
+  artifactId?: string;
+  createdAt: number;
 }
 
 export interface HumanFeedback {
@@ -166,6 +182,9 @@ export interface Task {
   /** Optional source metadata for an issue-driven task. */
   issueUrl?: string;
   issueNumber?: number;
+  source?: "event-center" | "github" | "ticket";
+  incidentId?: string;
+  service?: string;
   stage: Stage;
   lifecycle: Lifecycle;
   version: number;
@@ -176,6 +195,7 @@ export interface Task {
   constraints: TaskConstraints;
   commands: Record<string, string>;
   state: TaskState;
+  plan?: Plan;
   feedback?: HumanFeedback[];
   changePackage?: ChangePackage;
   pr?: PrRecord;

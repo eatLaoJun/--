@@ -354,6 +354,7 @@ export function renderStateBlock(task: Task, state: TaskState, stage: Stage): st
     `GOAL: ${task.description}`,
     `EXPECTED: ${task.expected}`,
     `ISSUE: ${task.issueUrl ?? "(local ticket)"}`,
+    `SOURCE: ${task.source ?? "ticket"} / ${task.service ?? task.projectId}`,
     `BASE_COMMIT: ${task.baseCommit ?? "unset"}`,
     `BRANCH: ${task.branch}`,
     `PATCH_HASH: ${task.patchHash ?? "clean"}`,
@@ -371,6 +372,18 @@ export function renderStateBlock(task: Task, state: TaskState, stage: Stage): st
     ...((task.feedback ?? []).slice(-6).map((item) =>
       `- [${item.resolvedAt ? "resolved" : "UNRESOLVED"}] ${oneLine(item.message, 500)}`,
     ) || ["- none"]),
+    "",
+    "STRUCTURED PLAN (from PLAN stage):",
+    ...(task.plan
+      ? [
+          `- status: ${task.plan.status}`,
+          `- approach: ${oneLine(task.plan.approach, 700)}`,
+          `- hypotheses: ${task.plan.rootCauseHypotheses.map((item) => oneLine(item, 240)).join(" | ")}`,
+          `- files: ${task.plan.filesToChange.join(", ")}`,
+          `- test plan: ${task.plan.testPlan.map((item) => oneLine(item, 240)).join(" | ")}`,
+          `- risks: ${task.plan.risks.map((item) => oneLine(item, 240)).join(" | ")}`,
+        ]
+      : ["- none yet"]),
     "",
     "HYPOTHESES (unconfirmed unless stated):",
     ...(hypotheses.length ? hypotheses : ["- none yet"]),

@@ -72,10 +72,13 @@ async function main(): Promise<void> {
     });
     let taskId = str(flags, "task");
     if (!taskId) {
+      const incident = str(flags, "incident");
       const issue = str(flags, "issue");
-      const created = issue
-        ? await harness.createTaskFromIssue(issue)
-        : await harness.createTaskFromTicket(str(flags, "ticket", "fixtures/tickets/T-1001.json")!);
+      const created = incident
+        ? await harness.createTaskFromIncident(incident)
+        : issue
+          ? await harness.createTaskFromIssue(issue)
+          : await harness.createTaskFromTicket(str(flags, "ticket", "fixtures/tickets/T-1001.json")!);
       taskId = created.task.id;
       console.log(`created ${taskId} (base ${created.task.baseCommit?.slice(0, 12)}, branch ${created.task.branch})`);
       if (created.task.issueUrl) console.log(`issue: ${created.task.issueUrl}`);
@@ -297,7 +300,7 @@ function printHelp(): void {
   console.log(`ForgePilot CLI
 
   serve [--port 4310] [--host 127.0.0.1] [--model provider/id]
-  fix --ticket <file> | --issue <github-issue-url-or-fixture> [--auto-approve] [--task <id>] [--fault <name>]
+  fix --ticket <file> | --issue <github-issue-url-or-fixture> | --incident <id> [--auto-approve] [--task <id>] [--fault <name>]
   chat <taskId> [--message "..."] [--model provider/id] [--no-trace]
   changes <taskId> --message "请改成 ..."
   status <taskId>

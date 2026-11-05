@@ -11,6 +11,12 @@ function summarize(event: EventItem): string {
   switch (event.type) {
     case "tool_call":
       return `${String(detail.name ?? "tool")} ${JSON.stringify(detail.input ?? {}).slice(0, 220)}`;
+    case "incident_ingested":
+      return `service ${String(detail.service ?? "")} · ${String(detail.incidentId ?? "")} · ${String(detail.url ?? "")}`;
+    case "repository_resolved":
+      return `${String(detail.repoName ?? "")} · base ${String(detail.baseCommit ?? "").slice(0, 12)} · ${String(detail.branch ?? "")}`;
+    case "plan_recorded":
+      return `plan artifact ${String(detail.artifactId ?? "").slice(0, 12)} · files ${((detail.filesToChange as string[] | undefined) ?? []).join(", ")}`;
     case "agent_turn": {
       const usage = (detail.usage ?? {}) as { input?: number; output?: number; cacheRead?: number };
       const tokens = (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0);
@@ -45,6 +51,7 @@ function summarize(event: EventItem): string {
 const FILTERS = [
   { value: "all", label: "全部" },
   { value: "tool_call", label: "工具" },
+  { value: "flow", label: "流程" },
   { value: "agent_turn", label: "AI turn" },
   { value: "verification", label: "验证" },
   { value: "context_metrics", label: "上下文" },
@@ -56,6 +63,7 @@ function matchesFilter(event: EventItem, filter: string): boolean {
   if (filter === "all") return true;
   if (filter === "tool_call") return event.type === "tool_call" || event.type === "tool_result";
   if (filter === "verification") return event.type === "verification";
+  if (filter === "flow") return ["task_created", "incident_ingested", "repository_resolved", "plan_recorded", "stage_advanced", "package_created", "waiting_approval", "approved", "branch_published", "pr_created", "delivered"].includes(event.type);
   if (filter === "agent_turn") return event.type === "agent_turn";
   if (filter === "context_metrics") return event.type === "context_metrics";
   if (filter === "approval") return ["changes_requested", "approved", "waiting_approval", "package_created", "branch_published", "pr_created", "delivered"].includes(event.type);

@@ -90,7 +90,7 @@ npm run build
 
 预期：
 
-- `npm test`：21 个测试通过；
+- `npm test`：22 个测试通过；
 - `npm run build`：通过；
 - 本机已配置 pi 模型（默认 `dsh/deepseek-v4.1-flash`）。
 
@@ -537,6 +537,21 @@ list_changed_files → 返回当前 changedFiles
 把它加入 Review Chat 的 `REVIEW_TOOLS`，在 UI 里问“这次改了哪些文件”。
 
 **学到**：`defineTool`、TypeBox schema、工具白名单、`details` 与 `content` 的区别。
+
+### Lab 3.5：事件中心 → 仓库定位 → 方案
+
+```bash
+npm run demo:incident
+```
+
+观察：
+
+- `INGEST` 只读取 incident，不猜仓库；
+- `RESOLVE` 从 `fixtures/event-center/projects.json` 取授权映射；
+- `PLAN` 只读，调用 `record_plan` 产出结构化方案；
+- `REPAIR` 读取 Plan 后改码。
+
+**学到**：流程控制是 Harness，pi 只执行 PLAN/REPAIR 阶段的 Agent 循环。
 
 ### Lab 4：故障注入与恢复
 

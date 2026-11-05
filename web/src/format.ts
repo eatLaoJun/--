@@ -14,6 +14,9 @@ export function stageLabel(stage: string): string {
 export function eventLabel(type: string): string {
   const labels: Record<string, string> = {
     task_created: "任务创建",
+    incident_ingested: "事件接入",
+    repository_resolved: "仓库定位",
+    plan_recorded: "方案记录",
     stage_advanced: "阶段推进",
     tool_call: "工具调用",
     tool_result: "工具结果",
@@ -43,6 +46,7 @@ export function eventLabel(type: string): string {
 export function eventTone(type: string): string {
   if (["task_failed", "background_run_failed", "cancelled"].includes(type)) return "danger";
   if (["approved", "delivered", "pr_created", "branch_published"].includes(type)) return "success";
+  if (["incident_ingested", "repository_resolved", "plan_recorded", "stage_advanced"].includes(type)) return "info";
   if (["changes_requested", "waiting_approval", "recovery"].includes(type)) return "warn";
   if (["tool_call", "tool_result", "agent_turn", "verification"].includes(type)) return "info";
   return "muted";

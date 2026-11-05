@@ -48,6 +48,16 @@ export const ReadArtifactSchema = Type.Object({
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 20000 })),
 });
 
+export const RecordPlanSchema = Type.Object({
+  rootCauseHypotheses: Type.Array(Type.String(), { description: "Candidate root causes, each with a file:line reference" }),
+  approach: Type.String({ description: "Chosen minimal approach" }),
+  alternatives: Type.Array(Type.String(), { description: "Alternatives considered and why rejected" }),
+  filesToChange: Type.Array(Type.String(), { description: "Expected files to change" }),
+  testPlan: Type.Array(Type.String(), { description: "Verification/reproduction plan" }),
+  risks: Type.Array(Type.String(), { description: "Residual risks and edge cases" }),
+  evidence: Type.Array(Type.String(), { description: "file:line or tool-result references" }),
+});
+
 export const PackageChangeSchema = Type.Object({
   rationale: Type.String({ description: "Reviewer-facing explanation of the fix and evidence" }),
 });

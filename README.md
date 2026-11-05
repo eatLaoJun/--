@@ -11,8 +11,9 @@
 ```bash
 cd D:/workfile/forgepilot
 npm install
-npm test              # 19 个确定性测试，不调用模型
+npm test              # 22 个确定性测试，不调用模型
 npm run ui            # Web 工作台：http://127.0.0.1:4310
+npm run demo:incident # 事件中心 Bug → 仓库定位 → 方案 → 改码 → 验证 → PR
 npm run demo:fix      # 真实模型跑一次 Bug 修复 → 测试 → 审批 → 分支/PR
 npm run demo:fault    # 故障注入：PR 已创建但响应丢失，恢复后不重复创建
 npm run demo:review-chat    # GitHub issue → 修复 → 审核对话 → 通过 → PR
@@ -30,26 +31,29 @@ FORGEPILOT_MODEL=dsh/deepseek-v4.1-pro npm run demo:fix
 
 ## 2. 它解决了什么
 
-一个 Bug 从工单到交付，不只是“让模型改几行代码”：
+一个 Bug 从事件中心到交付，不只是“让模型改几行代码”：
 
 ```text
-工单/权限/固定 base_commit
-  → 隔离工作区
-  → 复现（未修复版本必须先失败/出现目标现象）
-  → 根因定位 + 最小补丁
-  → 测试/构建验证（绑定代码指纹）
-  → 变更包 + 人工审批
-  → 推送分支 + 创建/核对 PR
-  → 人工评审与合并
+事件中心 Bug / 工单
+  → INGEST      读取事件、来源校验、去重
+  → RESOLVE     service → 授权仓库 → base branch → 可信命令
+  → PLAN        读代码，产出根因假设、方案、测试计划、风险
+  → REPAIR      按方案做最小 patch
+  → VERIFY      复现/测试/构建，证据绑定代码指纹
+  → PACKAGE     变更包 + 人工审批
+  → PUBLISH     推送分支 + 创建/核对 PR
+  → 人工审核与合并
 ```
 
 Harness 决定“当前允许进入哪个阶段、能调用什么工具”，模型只在当前阶段内做决策。改码、验证、发布都不靠模型自述成功。
 
-主链路阶段：
+当前 M1 主链路：
 
 ```text
-PREPARE → REPRODUCE → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE
+INGEST → RESOLVE → PLAN → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE
 ```
+
+旧的 ticket 流程 `PREPARE → REPRODUCE → REPAIR ...` 仍保留用于兼容历史任务。事件中心入口不会让模型猜仓库：仓库映射来自 `fixtures/event-center/projects.json` 的可信配置。
 
 生命周期单独管理：
 
@@ -193,14 +197,14 @@ src/
   context/         分层上下文组装
   domain/          阶段/生命周期/预算/数据模型
   harness/         编排器、运行时、恢复/幂等/发布
-  integrations/    Git、PR、GitHub issue、工单、验证命令
+  integrations/    Git、PR、GitHub issue、事件中心、项目绑定、验证命令
   review/          只读审核对话（prompt + service）
   store/           Task/Artifact/Operation/Checkpoint/Verification/Lease/Event/ReviewChat
   eval/review/     Review 评估
   eval/swebench/   SWE-bench 双臂评估
   web/             React 工作台（Vite + React Router + SSE）
   cli.ts
-fixtures/          示例仓库、GitHub issue、工单、Review 标签、SWE-bench 实例
+fixtures/          示例仓库、事件中心 incident、项目绑定、GitHub issue、工单、Review 标签、SWE-bench 实例
 scripts/           demo 脚本
 tests/             确定性测试
 docs/design.md     详细设计
@@ -233,7 +237,7 @@ docs/pi-study-guide.md  pi × ForgePilot 学习手册（阅读路线 + 实验 + 
 
 **本地适配器（面试时可替换为生产实现）**
 
-- 工单系统：本地 JSON（`fixtures/tickets/`、`fixtures/github/`），可替换为 Jira/云效/GitHub API 适配器；
+- 工单/事件中心：本地 JSON（`fixtures/event-center/`、`fixtures/tickets/`、`fixtures/github/`），可替换为内部事件中心/Jira/云效/GitHub API 适配器；
 - 代码托管：本地 PR 记录（`local://pr/...`），可替换为 GitLab/Codeup API；
 - 工作区：模板复制 + git init，可替换为 `git worktree` / 容器沙箱（已保留 `prepareExistingRepoWorktree`）；
 - 存储：文件 + 原子写 + sha256 制品，可替换为 Postgres + 对象存储；
@@ -266,7 +270,7 @@ npm test
 - 补丁落盘后崩溃恢复、PR 响应丢失恢复、验证指纹失效；
 - `git diff` 指纹跨 commit 稳定、changedFiles 路径正确；
 - SWE-bench 双臂执行、隐藏测试后置、空补丁不判 resolved；
-- React 工作台路由、任务筛选、事件时间线 API、SPA fallback。
+- 事件中心 incident → INGEST/RESOLVE/PLAN 任务、项目绑定、整体流程时间线、per-stage Ask AI、React 路由、任务筛选、事件时间线 API、SPA fallback。
 
 ## 11. 面试一句话
 

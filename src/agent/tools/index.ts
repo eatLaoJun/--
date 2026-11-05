@@ -9,6 +9,7 @@ import {
   EmptySchema,
   PackageChangeSchema,
   ReadArtifactSchema,
+  RecordPlanSchema,
   RecordEvidenceSchema,
   RecordHypothesisSchema,
   RunVerificationSchema,
@@ -169,6 +170,38 @@ export function createHarnessTools(runtime: TaskRuntime) {
     }),
 
     defineTool({
+      name: "record_plan",
+      label: "Record Plan",
+      description:
+        "Record a structured solution plan for the current incident: root-cause hypotheses, chosen approach, alternatives, files, test plan and risks. " +
+        "This is a planning tool only; it does not modify code.",
+      parameters: RecordPlanSchema,
+      async execute(_toolCallId, params) {
+        const plan = await runtime.recordPlan({
+          rootCauseHypotheses: params.rootCauseHypotheses,
+          approach: params.approach,
+          alternatives: params.alternatives,
+          filesToChange: params.filesToChange,
+          testPlan: params.testPlan,
+          risks: params.risks,
+          evidence: params.evidence,
+          status: "draft",
+        });
+        return {
+          content: text(
+            [
+              `Plan recorded: ${plan.filesToChange.length} file(s), ${plan.rootCauseHypotheses.length} hypothesis(es).`,
+              `Approach: ${plan.approach}`,
+              `Test plan: ${plan.testPlan.join("; ")}`,
+              `Artifact: ${plan.artifactId}`,
+            ].join("\n"),
+          ),
+          details: plan,
+        };
+      },
+    }),
+
+    defineTool({
       name: "package_change",
       label: "Package Change",
       description:
@@ -261,9 +294,10 @@ export function createHarnessTools(runtime: TaskRuntime) {
             diff = "";
           }
         }
-        if (!diff) diff = await runtime.workspace.diff();
+        if (!diff && task.workspacePath) diff = await runtime.workspace.diff();
         const verifications = (await runtime.stores.verifications.list(task.id)).slice(-6);
         const pr = task.pr ?? (await runtime.stores.pr.findByTask(task.id));
+        const changedFiles = pkg?.changedFiles ?? (task.workspacePath ? await runtime.workspace.changedFiles() : []);
         return {
           content: text(
             JSON.stringify(
@@ -272,7 +306,7 @@ export function createHarnessTools(runtime: TaskRuntime) {
                 stage: task.stage,
                 lifecycle: task.lifecycle,
                 patchHash: pkg?.patchHash ?? task.patchHash,
-                changedFiles: pkg?.changedFiles ?? (await runtime.workspace.changedFiles()),
+                changedFiles,
                 diffStat: pkg?.diffStat,
                 rationale: pkg?.rationale,
                 verification: verifications.map((v) => ({

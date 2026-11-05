@@ -5,6 +5,9 @@ export interface TaskSummary {
   stage: string;
   lifecycle: string;
   issueUrl?: string;
+  source?: string;
+  incidentId?: string;
+  service?: string;
   patchHash?: string;
   changedFiles: string[];
   pr?: { id: string; url: string; branch: string; headCommit: string; status: string };
@@ -38,6 +41,7 @@ export interface ReviewMessage {
   at: number;
   meta?: {
     model?: string;
+    stage?: string;
     patchHash?: string;
     thinkingChars?: number;
     tools?: Array<{ toolCallId: string; toolName: string; isError: boolean; durationMs?: number; summary: string }>;
@@ -54,8 +58,13 @@ export interface Task {
   repoName: string;
   issueUrl?: string;
   issueNumber?: number;
+  source?: string;
+  incidentId?: string;
+  service?: string;
   baseCommit?: string;
   branch: string;
+  createdAt: number;
+  updatedAt: number;
   stage: string;
   lifecycle: string;
   patchHash?: string;
@@ -83,6 +92,18 @@ export interface Task {
   };
   pr?: { id: string; url: string; branch: string; headCommit: string; status: string };
   feedback?: Array<{ id: string; message: string; requestedAt: number; resolvedAt?: number; priorPatchHash?: string }>;
+  plan?: {
+    rootCauseHypotheses: string[];
+    approach: string;
+    alternatives: string[];
+    filesToChange: string[];
+    testPlan: string[];
+    risks: string[];
+    evidence: string[];
+    status: string;
+    artifactId?: string;
+    createdAt: number;
+  };
   summary?: string;
   lastError?: string;
   workspacePath?: string;
@@ -104,6 +125,20 @@ export interface TaskDetail {
   diff: string;
   running: boolean;
   reviewTools: string[];
+}
+
+export interface IncidentFixture {
+  id: string;
+  externalId: string;
+  title: string;
+  description: string;
+  expected: string;
+  service: string;
+  severity?: string;
+  reporter?: string;
+  url?: string;
+  dedupeKey: string;
+  createdAt: number;
 }
 
 export interface IssueFixture {

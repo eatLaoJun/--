@@ -5,6 +5,7 @@ import type { PatchChange } from "../agent/tools/schemas.js";
 import type { Checkpoint } from "../domain/checkpoint.js";
 import type {
   ChangePackage,
+  Plan,
   Lease,
   EvidenceRef,
   Hypothesis,
@@ -17,7 +18,7 @@ import type {
 import { executeVerification } from "../integrations/verification.js";
 import { envFingerprint, GitWorkspace } from "../integrations/git.js";
 import type { HarnessStores } from "./stores.js";
-import { hashObject, shortHash } from "../utils/text.js";
+import { hashObject, oneLine, shortHash } from "../utils/text.js";
 import { ensureDir, matchesAnyGlob, safeJoin } from "../utils/paths.js";
 import { semanticOperationKey } from "../store/operation-store.js";
 
@@ -179,6 +180,7 @@ export class TaskRuntime {
   }
 
   async currentPatchHash(): Promise<string> {
+    if (!this.task.workspacePath) return "";
     const now = Date.now();
     if (this.patchHashCache && now - this.patchHashCache.at < 500) return this.patchHashCache.hash;
     const hash = await this.workspace.patchHash();
@@ -187,6 +189,9 @@ export class TaskRuntime {
   }
 
   async currentDiff(): Promise<{ diff: string; patchHash: string; diffStat: string; changedFiles: string[] }> {
+    if (!this.task.workspacePath) {
+      return { diff: "", patchHash: "", diffStat: "", changedFiles: [] };
+    }
     const [diff, diffStat, changedFiles] = await Promise.all([
       this.workspace.diff(),
       this.workspace.diffStat(),
@@ -224,6 +229,42 @@ export class TaskRuntime {
       if (draft.state.hypotheses.length > 30) draft.state.hypotheses.shift();
     });
     return hypothesis;
+  }
+
+  async recordPlan(input: Omit<Plan, "createdAt" | "artifactId">): Promise<Plan> {
+    const artifact = await this.stores.artifacts.put(JSON.stringify(input, null, 2), {
+      taskId: this.task.id,
+      kind: "plan",
+      name: `plan-${Date.now()}.json`,
+    });
+    const plan: Plan = { ...input, artifactId: artifact.id, createdAt: Date.now() };
+    await this.update((draft) => {
+      draft.plan = plan;
+      draft.state.nextAction = "plan recorded; proceed to repair";
+      for (const hypothesis of plan.rootCauseHypotheses) {
+        draft.state.hypotheses.push({
+          id: `H-${Date.now()}-${shortHash(hypothesis, 4)}`,
+          text: hypothesis,
+          evidence: plan.evidence,
+          confidence: "medium",
+          status: "open",
+          at: Date.now(),
+        });
+      }
+      draft.state.confirmedFacts.push({
+        id: `E-${Date.now()}-plan`,
+        claim: `Plan recorded: ${oneLine(plan.approach, 240)}`,
+        kind: "artifact",
+        reference: `artifact:${artifact.id}`,
+        at: Date.now(),
+      });
+    });
+    await this.event("plan_recorded", {
+      artifactId: artifact.id,
+      filesToChange: plan.filesToChange,
+      status: plan.status,
+    });
+    return plan;
   }
 
   async applyChanges(changes: PatchChange[], rationale: string): Promise<{
@@ -639,6 +680,24 @@ export class TaskRuntime {
   }
 
   async saveCheckpoint(nextSafeAction: string): Promise<Checkpoint> {
+    if (!this.task.workspacePath) {
+      const checkpoint: Checkpoint = {
+        id: `C-${Date.now()}-${shortHash(`${this.task.id}${this.task.stage}`, 4)}`,
+        taskId: this.task.id,
+        stage: this.task.stage,
+        lifecycle: this.task.lifecycle,
+        taskVersion: this.task.version,
+        nextSafeAction,
+        workspace: { path: "", head: "", patchHash: "", diffStat: "" },
+        operationsDone: [],
+        operationsPending: [],
+        state: structuredClone(this.task.state),
+        budget: structuredClone(this.task.budget),
+        createdAt: Date.now(),
+      };
+      await this.stores.checkpoints.save(checkpoint);
+      return checkpoint;
+    }
     const patchHash = await this.currentPatchHash();
     const head = await this.workspace.head();
     const ops = await this.stores.operations.list(this.task.id);
@@ -671,6 +730,7 @@ export class TaskRuntime {
   async recover(): Promise<string[]> {
     const notes: string[] = [];
     await this.reload();
+    if (!this.task.workspacePath) return notes;
     const ops = await this.stores.operations.list(this.task.id);
     for (const op of ops) {
       if (op.status === "done" || op.status === "failed") continue;

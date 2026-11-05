@@ -7,6 +7,7 @@ import type { ReviewMessage } from "../store/review-chat-store.js";
 import { GitWorkspace } from "../integrations/git.js";
 import { buildReviewPrompt, buildReviewSystemPrompt } from "./prompt.js";
 import { truncate } from "../utils/text.js";
+import type { Stage } from "../domain/types.js";
 import type { AgentStreamEvent, ToolTrace } from "../agent/ui-events.js";
 
 export const REVIEW_TOOLS = [
@@ -35,14 +36,14 @@ export class ReviewChatService {
     question: string,
     onDelta?: (delta: string) => void,
     onStreamEvent?: (event: AgentStreamEvent) => void,
+    stage?: string,
   ): Promise<{ answer: string; history: ReviewMessage[] }> {
     const task = await this.stores.tasks.get(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
-    if (!task.workspacePath) throw new Error(`Task ${taskId} has no workspace`);
     if (task.cancelRequested || task.lifecycle === "CANCELLED") {
       throw new Error(`Task ${taskId} is cancelled`);
     }
-    if (!["WAITING_APPROVAL", "WAITING_INPUT", "PAUSED", "FAILED", "DELIVERED"].includes(task.lifecycle)) {
+    if (!stage && !["WAITING_APPROVAL", "WAITING_INPUT", "PAUSED", "FAILED", "DELIVERED"].includes(task.lifecycle)) {
       throw new Error(
         "Review chat is available after the patch is packaged (WAITING_APPROVAL) or delivered. " +
           "The task is currently " + task.lifecycle + ".",
@@ -52,18 +53,18 @@ export class ReviewChatService {
     if (!trimmed) throw new Error("Question must not be empty");
 
     const history = await this.stores.reviewChat.list(taskId);
-    await this.stores.reviewChat.append({ taskId, role: "engineer", content: trimmed });
+    await this.stores.reviewChat.append({ taskId, role: "engineer", content: trimmed, meta: { stage } });
 
     const diff = await this.loadDiff(task);
     const verification = (await this.stores.verifications.list(taskId))
       .slice()
       .reverse()
       .find((record) => record.kind === "test");
-    const prompt = buildReviewPrompt({ task, history, question: trimmed, diff, verification });
+    const prompt = buildReviewPrompt({ task, history, question: trimmed, diff, verification, stage });
     const runtime = new TaskRuntime({
       stores: this.stores,
       task,
-      workspace: new GitWorkspace(task.workspacePath),
+      workspace: new GitWorkspace(task.workspacePath ?? process.cwd()),
     });
     const assembler = new ContextAssembler(this.stores.artifacts);
     const tools: ToolTrace[] = [];
@@ -72,12 +73,12 @@ export class ReviewChatService {
     try {
       const result = await runPiStageAgent({
         runtime,
-        stage: "PACKAGE",
+        stage: (stage ?? task.stage) as Stage,
         prompt,
         allowedTools: REVIEW_TOOLS,
         assembler,
         models: this.models,
-        systemPromptText: buildReviewSystemPrompt(task),
+        systemPromptText: buildReviewSystemPrompt(task, stage),
         allowWaiting: true,
         countAgainstBudget: false,
         // Review chat is not part of the execution budget; give it a separate timeout
@@ -107,6 +108,7 @@ export class ReviewChatService {
         meta: {
           model: this.models.name,
           patchHash: task.changePackage?.patchHash ?? task.patchHash,
+          stage,
           tools,
           thinkingChars,
         },
@@ -120,6 +122,7 @@ export class ReviewChatService {
   }
 
   private async loadDiff(task: NonNullable<Awaited<ReturnType<HarnessStores["tasks"]["get"]>>>): Promise<string> {
+    if (!task.workspacePath) return "";
     if (task.changePackage?.patchArtifactId) {
       try {
         return await this.stores.artifacts.get(task.changePackage.patchArtifactId);

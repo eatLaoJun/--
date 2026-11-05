@@ -1,4 +1,4 @@
-import type { EventItem, IssueFixture, Task, TaskDetail, TaskSummary } from "./types";
+import type { EventItem, IncidentFixture, IssueFixture, Task, TaskDetail, TaskSummary } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -21,8 +21,9 @@ export const api = {
       `/api/tasks/${encodeURIComponent(id)}/events?limit=${limit}`,
     ),
   issues: () => request<IssueFixture[]>("/api/issues"),
-  createTask: (issue: string) =>
-    request<{ task: Task }>("/api/tasks", { method: "POST", body: JSON.stringify({ issue }) }),
+  incidents: () => request<IncidentFixture[]>("/api/incidents"),
+  createTask: (input: { incident?: string; issue?: string }) =>
+    request<{ task: Task }>("/api/tasks", { method: "POST", body: JSON.stringify(input) }),
   approve: (id: string) =>
     request<{ task: Task }>(`/api/tasks/${encodeURIComponent(id)}/approve`, { method: "POST" }),
   requestChanges: (id: string, message: string) =>

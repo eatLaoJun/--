@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "./api";
-import type { IssueFixture, TaskSummary } from "./types";
+import type { IncidentFixture, IssueFixture, TaskSummary } from "./types";
 
 interface TasksContextValue {
   tasks: TaskSummary[];
   issues: IssueFixture[];
+  incidents: IncidentFixture[];
   loading: boolean;
   error?: string;
   refresh: () => Promise<void>;
-  createTask: (issue: string) => Promise<string>;
+  createTask: (input: { incident?: string; issue?: string }) => Promise<string>;
 }
 
 const TasksContext = createContext<TasksContextValue | undefined>(undefined);
@@ -16,14 +17,16 @@ const TasksContext = createContext<TasksContextValue | undefined>(undefined);
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [issues, setIssues] = useState<IssueFixture[]>([]);
+  const [incidents, setIncidents] = useState<IncidentFixture[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
   const refresh = useCallback(async () => {
     try {
-      const [nextTasks, nextIssues] = await Promise.all([api.tasks(), api.issues()]);
+      const [nextTasks, nextIssues, nextIncidents] = await Promise.all([api.tasks(), api.issues(), api.incidents()]);
       setTasks(nextTasks);
       setIssues(nextIssues);
+      setIncidents(nextIncidents);
       setError(undefined);
     } catch (err) {
       setError((err as Error).message);
@@ -39,8 +42,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const createTask = useCallback(
-    async (issue: string) => {
-      const created = await api.createTask(issue);
+    async (input: { incident?: string; issue?: string }) => {
+      const created = await api.createTask(input);
       await refresh();
       return created.task.id;
     },
@@ -48,8 +51,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ tasks, issues, loading, error, refresh, createTask }),
-    [tasks, issues, loading, error, refresh, createTask],
+    () => ({ tasks, issues, incidents, loading, error, refresh, createTask }),
+    [tasks, issues, incidents, loading, error, refresh, createTask],
   );
   return <TasksContext.Provider value={value}>{children}</TasksContext.Provider>;
 }

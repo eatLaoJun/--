@@ -7,6 +7,8 @@ import { createBudget, initialMetrics } from "../domain/types.js";
 import { STAGE_TOOLS, nextStage, stagePrompt } from "../domain/stages.js";
 import { loadTicket, type LoadedTicket } from "../integrations/ticket.js";
 import { loadGithubIssue } from "../integrations/github.js";
+import { getIncident } from "../integrations/event-center.js";
+import { resolveProjectBinding, type ProjectBinding } from "../integrations/project-binding.js";
 import { GitWorkspace, prepareTemplateWorkspace, sanitizeBranch } from "../integrations/git.js";
 import { createStores, type HarnessStores } from "./stores.js";
 import { CancelledError, InjectedCrash, TaskRuntime, BudgetExceededError } from "./runtime.js";
@@ -54,6 +56,58 @@ export class ForgePilotHarness {
     return this.createTaskFromLoadedTicket(await loadGithubIssue(this.config.projectRoot, issueInput));
   }
 
+  /**
+   * Event-center entry point. The task starts without a workspace: RESOLVE is
+   * responsible for mapping the service to an authorized repository. This keeps
+   * issue text from choosing the repository or verification commands.
+   */
+  async createTaskFromIncident(incidentId: string): Promise<{ task: Task }> {
+    const incident = await getIncident(this.config.projectRoot, incidentId);
+    const existing = (await this.stores.tasks.list()).find(
+      (task) => task.incidentId === incident.id && !["FAILED", "CANCELLED"].includes(task.lifecycle),
+    );
+    if (existing) return { task: existing };
+
+    const taskId = newTaskId();
+    const now = Date.now();
+    const task: Task = {
+      id: taskId,
+      ticketId: incident.externalId,
+      projectId: incident.service,
+      title: incident.title,
+      description: incident.description,
+      expected: incident.expected,
+      repoName: incident.service,
+      source: "event-center",
+      incidentId: incident.id,
+      service: incident.service,
+      issueUrl: incident.url,
+      branch: "",
+      stage: "INGEST",
+      lifecycle: "QUEUED",
+      version: 1,
+      cancelRequested: false,
+      createdAt: now,
+      updatedAt: now,
+      budget: createBudget(),
+      constraints: { protectedPaths: [], allowedPaths: ["**"], notes: [], acceptance: [] },
+      commands: {},
+      state: { confirmedFacts: [], hypotheses: [], attempts: [], pendingQuestions: [] },
+      feedback: [],
+      faults: this.config.fault ? [this.config.fault] : [],
+      faultsFired: [],
+      metrics: initialMetrics(),
+    };
+    await this.stores.tasks.create(task);
+    await this.stores.events.append({
+      taskId,
+      type: "task_created",
+      stage: "INGEST",
+      detail: { ticketId: task.ticketId, incidentId: incident.id, source: incident.source, service: incident.service },
+    });
+    return { task };
+  }
+
   private async createTaskFromLoadedTicket(
     loaded: LoadedTicket,
   ): Promise<{ task: Task; workspace: GitWorkspace }> {
@@ -69,6 +123,7 @@ export class ForgePilotHarness {
       description: loaded.ticket.description,
       expected: loaded.ticket.expected,
       repoName: loaded.ticket.repoName,
+      source: loaded.ticket.issueUrl ? "github" : "ticket",
       issueUrl: loaded.ticket.issueUrl,
       issueNumber: loaded.ticket.issueNumber,
       templatePath: loaded.templatePath,
@@ -133,6 +188,7 @@ export class ForgePilotHarness {
     question: string,
     onDelta?: (delta: string) => void,
     onStreamEvent?: (event: AgentStreamEvent) => void,
+    stage?: string,
   ): Promise<{
     answer: string;
     history: ReviewMessage[];
@@ -140,7 +196,7 @@ export class ForgePilotHarness {
     if (!this.reviewService) {
       this.reviewService = new ReviewChatService(this.stores, await this.getModels());
     }
-    return this.reviewService.ask(taskId, question, onDelta, onStreamEvent);
+    return this.reviewService.ask(taskId, question, onDelta, onStreamEvent, stage);
   }
 
   async requestChanges(
@@ -187,10 +243,11 @@ export class ForgePilotHarness {
     this.contextMetrics = [];
     const initial = await this.stores.tasks.get(taskId);
     if (!initial) throw new Error(`Task not found: ${taskId}`);
-    if (!initial.workspacePath) throw new Error(`Task ${taskId} has no workspace`);
 
     const lease = await this.stores.leases.acquire(taskId, this.owner, 120_000);
-    const workspace = new GitWorkspace(initial.workspacePath);
+    const workspace = new GitWorkspace(
+      initial.workspacePath ?? path.join(this.config.root, "workspaces", taskId),
+    );
     const runtime = new TaskRuntime({
       stores: this.stores,
       task: initial,
@@ -216,7 +273,8 @@ export class ForgePilotHarness {
       if (task.lifecycle === "QUEUED") {
         task = await runtime.update((draft) => {
           draft.lifecycle = "RUNNING";
-          draft.state.nextAction = "prepare the fixed workspace";
+          draft.state.nextAction =
+            draft.source === "event-center" ? "ingest the event-center incident" : "prepare the fixed workspace";
         });
       }
 
@@ -240,6 +298,15 @@ export class ForgePilotHarness {
         await runtime.checkBudget();
 
         switch (task.stage) {
+          case "INGEST":
+            await this.runIngest(runtime);
+            break;
+          case "RESOLVE":
+            await this.runResolve(runtime);
+            break;
+          case "PLAN":
+            await this.runPlan(runtime);
+            break;
           case "PREPARE":
             await this.runPrepare(runtime);
             break;
@@ -341,6 +408,118 @@ export class ForgePilotHarness {
     });
   }
 
+  private async runIngest(runtime: TaskRuntime): Promise<void> {
+    const task = await runtime.reload();
+    if (!task.incidentId) throw new Error("INGEST requires an event-center incident id");
+    await runtime.recordEvidence({
+      claim: `Incident ${task.incidentId} ingested from event center for service ${task.service ?? task.projectId}.`,
+      kind: "note",
+      reference: task.issueUrl ?? `incident:${task.incidentId}`,
+    });
+    await runtime.event("incident_ingested", {
+      incidentId: task.incidentId,
+      service: task.service,
+      url: task.issueUrl,
+    });
+    await this.advance(runtime, "RESOLVE", "resolve service to an authorized repository");
+  }
+
+  private async runResolve(runtime: TaskRuntime): Promise<void> {
+    const task = await runtime.reload();
+    if (!task.incidentId) throw new Error("RESOLVE requires an event-center incident id");
+    const incident = await getIncident(this.config.projectRoot, task.incidentId);
+    let binding: ProjectBinding;
+    try {
+      binding = await resolveProjectBinding(this.config.projectRoot, incident);
+    } catch (err) {
+      await runtime.markWaitingInput((err as Error).message);
+      return;
+    }
+
+    const workspacePath = task.workspacePath ?? path.join(this.config.root, "workspaces", task.id);
+    const prepared = task.baseCommit
+      ? { baseCommit: task.baseCommit, branch: task.branch || `${sanitizeBranch(task.id)}/fix` }
+      : await prepareTemplateWorkspace(binding.repoTemplate, workspacePath, task.id);
+    runtime.workspace.setBase(prepared.baseCommit);
+    await runtime.update((draft) => {
+      draft.service = incident.service;
+      draft.projectId = incident.service;
+      draft.repoName = binding.repoName;
+      draft.templatePath = binding.repoTemplate;
+      draft.workspacePath = workspacePath;
+      draft.baseCommit = prepared.baseCommit;
+      draft.branch = prepared.branch;
+      draft.commands = binding.commands;
+      draft.constraints = binding.constraints;
+      draft.budget = binding.budget ?? draft.budget;
+    });
+    await runtime.recordEvidence({
+      claim: `Resolved service ${incident.service} to ${binding.repoName}.`,
+      kind: "command",
+      reference: `repo:${binding.repoName}@${prepared.baseCommit.slice(0, 12)}`,
+    });
+    await runtime.event("repository_resolved", {
+      service: incident.service,
+      repoName: binding.repoName,
+      baseCommit: prepared.baseCommit,
+      branch: prepared.branch,
+      owners: binding.owners,
+    });
+    await this.advance(runtime, "PLAN", "read the repository and record a structured plan");
+  }
+
+  private async runPlan(runtime: TaskRuntime): Promise<void> {
+    const models = await this.getModels();
+    const assembler = new ContextAssembler(this.stores.artifacts);
+    const maxAttempts = Math.max(1, (this.config.maxNudges ?? 2) + 1);
+    let lastReason = "";
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const task = await runtime.reload();
+      const prompt =
+        (attempt === 0
+          ? stagePrompt(task, "PLAN")
+          : stagePrompt(task, "PLAN") +
+            "\n\n<forgepilot_nudge>\nThe harness has not accepted the plan yet: " +
+            lastReason +
+            "\nRead the relevant code, then call record_plan with a structured plan. Do not modify code.\n</forgepilot_nudge>") +
+        "\n\nUse record_plan before ending. The plan must include root-cause hypotheses, approach, alternatives, files, test plan and risks.";
+
+      await runPiStageAgent({
+        runtime,
+        stage: "PLAN",
+        prompt,
+        allowedTools: STAGE_TOOLS.PLAN,
+        assembler,
+        models,
+        onContextMetrics: (metrics) => this.contextMetrics.push(metrics),
+        onSession: (session) => this.activeSessions.set(task.id, session),
+        onSessionDisposed: () => this.activeSessions.delete(task.id),
+        onToolCall: (name, input) => {
+          void runtime.event("tool_call", { name, input: sanitizeInput(input) });
+        },
+      });
+      this.afterFault(runtime);
+      await runtime.checkBudget();
+
+      const after = await runtime.reload();
+      if (after.lifecycle === "WAITING_INPUT") return;
+      if (after.cancelRequested) throw new CancelledError(after.id);
+      if (after.plan) {
+        await runtime.recordEvidence({
+          claim: `Plan recorded with approach: ${oneLine(after.plan.approach, 300)}`,
+          kind: "artifact",
+          reference: after.plan.artifactId ? `artifact:${after.plan.artifactId}` : "plan",
+        });
+        await this.advance(runtime, "REPAIR", "implement the plan with a minimal patch");
+        return;
+      }
+      lastReason = "record_plan was not called. Read the code and submit a structured plan.";
+    }
+
+    await runtime.markWaitingInput(`Plan did not converge: ${lastReason}`);
+  }
+
   private async runPrepare(runtime: TaskRuntime): Promise<void> {
     const task = await runtime.reload();
     if (!task.baseCommit) throw new Error("baseCommit is missing");
@@ -436,7 +615,7 @@ export class ForgePilotHarness {
 
       const diff = await runtime.currentDiff();
       const hasPatch = diff.diff.trim().length > 0;
-      const hasHypothesis = after.state.hypotheses.length > 0;
+      const hasHypothesis = after.state.hypotheses.length > 0 || Boolean(after.plan);
       const unresolvedAfter = (after.feedback ?? []).find((item) => !item.resolvedAt);
       if (unresolvedAfter) {
         if (!hasPatch || diff.patchHash === unresolvedAfter.priorPatchHash) {

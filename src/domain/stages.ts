@@ -4,6 +4,9 @@ import { STAGES } from "./types.js";
 export const READ_ONLY_TOOLS = ["read", "grep", "find", "ls"];
 
 export const STAGE_TOOLS: Record<Stage, string[]> = {
+  INGEST: ["get_task_status"],
+  RESOLVE: ["get_task_status"],
+  PLAN: [...READ_ONLY_TOOLS, "record_plan", "record_evidence", "get_task_status"],
   PREPARE: [...READ_ONLY_TOOLS, "get_ticket", "get_task_status"],
   REPRODUCE: [
     ...READ_ONLY_TOOLS,
@@ -50,6 +53,12 @@ export function previousStage(stage: Stage): Stage {
 
 export function stageGoal(task: Task, stage: Stage): string {
   switch (stage) {
+    case "INGEST":
+      return "Read the incident from the event center, verify source and deduplication, then hand it to repository resolution. Do not modify code.";
+    case "RESOLVE":
+      return "Resolve the incident's service to an authorized repository, base branch, environment and trusted verification commands. Do not guess a repository.";
+    case "PLAN":
+      return "Read the repository and ticket, then record a structured plan: root-cause hypotheses, approach, alternatives, files, test plan and risks. Do not modify code.";
     case "PREPARE":
       return "Verify the isolated workspace and fixed base commit. Read the ticket and repository layout; do not modify code.";
     case "REPRODUCE":

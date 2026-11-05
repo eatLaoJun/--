@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ForgePilotHarness } from "../harness/orchestrator.js";
 import { GitWorkspace } from "../integrations/git.js";
 import { readJson, readJsonl } from "../utils/paths.js";
+import { listIncidents } from "../integrations/event-center.js";
 
 export interface WebServerOptions {
   projectRoot: string;
@@ -40,6 +41,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       if (url.pathname === "/api/issues" && req.method === "GET") {
         return sendJson(res, 200, await listIssueFixtures(options.projectRoot));
       }
+      if (url.pathname === "/api/incidents" && req.method === "GET") {
+        return sendJson(res, 200, await listIncidents(options.projectRoot));
+      }
       if (url.pathname === "/api/tasks" && req.method === "GET") {
         const stage = url.searchParams.get("stage") ?? undefined;
         const lifecycle = url.searchParams.get("lifecycle") ?? undefined;
@@ -67,6 +71,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
             stage: task.stage,
             lifecycle: task.lifecycle,
             issueUrl: task.issueUrl,
+            source: task.source,
+            incidentId: task.incidentId,
+            service: task.service ?? task.projectId,
             patchHash: task.changePackage?.patchHash ?? task.patchHash,
             changedFiles: task.changePackage?.changedFiles ?? [],
             pr: task.pr,
@@ -77,11 +84,14 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       }
       if (url.pathname === "/api/tasks" && req.method === "POST") {
         const body = await readBody(req);
+        const incident = typeof body.incident === "string" ? body.incident : undefined;
         const issue = typeof body.issue === "string" ? body.issue : undefined;
         const ticket = typeof body.ticket === "string" ? body.ticket : undefined;
-        const created = issue
-          ? await harness.createTaskFromIssue(issue)
-          : await harness.createTaskFromTicket(ticket ?? "fixtures/tickets/T-1001.json");
+        const created = incident
+          ? await harness.createTaskFromIncident(incident)
+          : issue
+            ? await harness.createTaskFromIssue(issue)
+            : await harness.createTaskFromTicket(ticket ?? "fixtures/tickets/T-1001.json");
         harness.startInBackground(created.task.id);
         return sendJson(res, 201, { task: created.task });
       }
@@ -107,8 +117,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
         if (action === "chat" && req.method === "POST") {
           const body = await readBody(req);
           const message = typeof body.message === "string" ? body.message : "";
+          const stage = typeof body.stage === "string" ? body.stage : undefined;
           if (!message.trim()) return sendJson(res, 400, { error: "message required" });
-          return streamReviewChat(req, res, harness, taskId, message);
+          return streamReviewChat(req, res, harness, taskId, message, stage);
         }
         if (action === "approve" && req.method === "POST") {
           await harness.approve(taskId);
@@ -168,7 +179,7 @@ async function taskDetail(harness: ForgePilotHarness, taskId: string) {
   const root = harness.config.root;
   const chat = await harness.reviewHistory(taskId);
   const verifications = await harness.stores.verifications.list(taskId);
-  const events = (await readJsonl<Record<string, unknown>>(path.join(root, "tasks", taskId, "events.jsonl"))).slice(-100);
+  const events = (await readJsonl<Record<string, unknown>>(path.join(root, "tasks", taskId, "events.jsonl"))).slice(-500);
   let diff = "";
   if (task.changePackage?.patchArtifactId) {
     try {
@@ -199,6 +210,7 @@ async function streamReviewChat(
   harness: ForgePilotHarness,
   taskId: string,
   message: string,
+  stage?: string,
 ): Promise<void> {
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -230,6 +242,7 @@ async function streamReviewChat(
         }
         write(event);
       },
+      stage,
     );
     write({ type: "done", answer: result.answer, history: result.history });
   } catch (err) {

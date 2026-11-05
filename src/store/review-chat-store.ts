@@ -10,7 +10,7 @@ export interface ReviewMessage {
   role: ReviewRole;
   content: string;
   at: number;
-  meta?: Record<string, unknown>;
+  meta?: Record<string, unknown> & { stage?: string };
 }
 
 export class ReviewChatStore {

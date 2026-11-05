@@ -1,0 +1,26 @@
+{
+  "course-platform": {
+    "repoName": "demo-course-service",
+    "repoTemplate": "fixtures/demo-repo",
+    "baseBranch": "main",
+    "commands": {
+      "repro": "node scripts/repro-pagination.js",
+      "test": "node --test tests/pagination.test.js",
+      "build": "node -e \"import('./src/pagination.js').then((m) => { if (typeof m.totalPages !== 'function') process.exit(1); console.log('build ok'); })\""
+    },
+    "owners": ["team-course"],
+    "constraints": {
+      "protectedPaths": ["tests/**", "scripts/**"],
+      "notes": [
+        "Only change source code under src/.",
+        "Do not modify tests, the reproduction script or verification configuration."
+      ],
+      "acceptance": [
+        "totalPages(40, 20) === 2",
+        "totalPages(20, 20) === 1",
+        "totalPages(41, 20) === 3",
+        "totalPages(0, 20) === 0"
+      ]
+    }
+  }
+}

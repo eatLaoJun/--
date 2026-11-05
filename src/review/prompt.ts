@@ -2,10 +2,10 @@ import type { Task, VerificationRecord } from "../domain/types.js";
 import type { ReviewMessage } from "../store/review-chat-store.js";
 import { oneLine, truncate } from "../utils/text.js";
 
-export function buildReviewSystemPrompt(task: Task): string {
-  return `You are ForgePilot's review assistant. An engineer is reviewing a proposed bug-fix patch before approval.
+export function buildReviewSystemPrompt(task: Task, stage?: string): string {
+  return `You are ForgePilot's stage-scoped engineering assistant for task ${task.ticketId}. The engineer may ask questions at any stage: incident intake, repository resolution, planning, repair, verification, PR review or delivery.
 
-Your job is to explain and defend the patch with evidence, or clearly acknowledge uncertainty. You are NOT the implementer in this conversation.
+Your job is to explain the current stage and its evidence, or clearly acknowledge uncertainty. You are NOT the implementer in this conversation. Current stage: ${stage ?? task.stage}.
 
 Hard rules:
 1. Read-only: never modify code, tests, configuration, branches or PR state. apply_patch/edit/write/bash are not available.
@@ -29,8 +29,9 @@ export function buildReviewPrompt(input: {
   question: string;
   diff: string;
   verification?: VerificationRecord;
+  stage?: string;
 }): string {
-  const { task, history, question, diff, verification } = input;
+  const { task, history, question, diff, verification, stage } = input;
   const unresolved = (task.feedback ?? []).filter((item) => !item.resolvedAt);
   const historyText = history
     .slice(-16)
@@ -38,7 +39,8 @@ export function buildReviewPrompt(input: {
     .join("\n");
 
   return [
-    `<review_context task="${task.ticketId}" patch="${task.changePackage?.patchHash ?? task.patchHash ?? "none"}">`,
+    `<review_context task="${task.ticketId}" stage="${stage ?? task.stage}" patch="${task.changePackage?.patchHash ?? task.patchHash ?? "none"}">`,
+    `current stage: ${stage ?? task.stage}`,
     `title: ${task.title}`,
     `expected: ${task.expected}`,
     `issue: ${task.issueUrl ?? "(local ticket)"}`,
@@ -47,6 +49,18 @@ export function buildReviewPrompt(input: {
     `verification evidence:\n${truncate(verification?.keyOutput ?? "(no key output)", 2500)}`,
     `PR: ${task.pr ? `${task.pr.id} ${task.pr.url}` : "(not created yet)"}`,
     `unresolved feedback: ${unresolved.length ? unresolved.map((item) => item.message).join(" | ") : "(none)"}`,
+    "",
+    "<structured_plan>",
+    task.plan
+      ? [
+          `approach: ${task.plan.approach}`,
+          `root causes: ${task.plan.rootCauseHypotheses.join(" | ")}`,
+          `files: ${task.plan.filesToChange.join(", ")}`,
+          `test plan: ${task.plan.testPlan.join("; ")}`,
+          `risks: ${task.plan.risks.join("; ")}`,
+        ].join("\n")
+      : "(no plan recorded yet)",
+    "</structured_plan>",
     "",
     "<proposed_diff>",
     truncate(diff || "(no diff available)", 9000),

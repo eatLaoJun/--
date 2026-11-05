@@ -21,7 +21,8 @@
     "demo:review-changes": "tsx scripts/demo-review-chat.ts --request-changes",
     "web:build": "vite build --config web/vite.config.ts",
     "web:dev": "vite --config web/vite.config.ts",
-    "typecheck:web": "tsc -p web/tsconfig.json --noEmit"
+    "typecheck:web": "tsc -p web/tsconfig.json --noEmit",
+    "demo:incident": "tsx scripts/demo-incident.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.4.0",

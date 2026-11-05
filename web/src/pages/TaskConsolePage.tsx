@@ -96,6 +96,7 @@ export function TaskConsolePage() {
           <thead>
             <tr>
               <th>任务</th>
+              <th>来源</th>
               <th>阶段</th>
               <th>生命周期</th>
               <th>Patch</th>
@@ -115,6 +116,11 @@ export function TaskConsolePage() {
                     <span className="ticket">{task.ticketId}</span>
                     {task.issueUrl ? <a href={task.issueUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>issue</a> : null}
                   </div>
+                </td>
+                <td>
+                  <div>{task.source === "event-center" ? "事件中心" : task.source === "github" ? "GitHub" : "工单"}</div>
+                  <div className="mono small">{task.service ?? "—"}</div>
+                  {task.incidentId ? <div className="event-raw-type">{task.incidentId}</div> : null}
                 </td>
                 <td><span className="stage-pill">{task.stage}</span></td>
                 <td><Badge value={task.lifecycle} /></td>

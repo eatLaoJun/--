@@ -1,0 +1,16 @@
+[
+  {
+    "id": "INC-2026-001",
+    "source": "event-center",
+    "externalId": "EVT-1001",
+    "title": "课程列表在记录数整除时多出一页",
+    "description": "事件中心收到运营反馈：课程列表接口返回 total=40、pageSize=20 时显示 3 页，但第 3 页为空。所有 record 数刚好被每页条数整除的场景都可能出现空页。",
+    "expected": "total=40、pageSize=20 返回 2 页；非整除仍向上取整；total=0 返回 0 页。",
+    "service": "course-platform",
+    "severity": "P1",
+    "reporter": "运营-小李",
+    "url": "http://event-center.local/incidents/INC-2026-001",
+    "dedupeKey": "event-center:EVT-1001",
+    "createdAt": 1793862000000
+  }
+]

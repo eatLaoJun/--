@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ReviewModal } from "../components/ReviewModal";
+import { FlowTimeline } from "../components/FlowTimeline";
 import { Badge } from "../components/Badge";
 import { RichText } from "../components/RichText";
 import { shortHash, time } from "../format";
@@ -12,6 +13,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const { detail, error, loading, refresh } = useTaskDetail(taskId);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [chatStage, setChatStage] = useState<string>();
   const [busy, setBusy] = useState(false);
 
   if (loading && !detail) return <div className="empty-small">加载任务…</div>;
@@ -65,6 +67,7 @@ export function TaskDetailPage() {
           <div className="meta">
             <Badge value={`${task.stage}`} />
             <Badge value={task.lifecycle} />
+            {task.service ? <span>service {task.service}</span> : null}
             <span>base {shortHash(task.baseCommit)}</span>
             <span>patch {shortHash(task.changePackage?.patchHash ?? task.patchHash)}</span>
             {task.pr ? <a href={task.pr.url} target="_blank" rel="noreferrer">{task.pr.id}</a> : null}
@@ -74,9 +77,9 @@ export function TaskDetailPage() {
 
       <div className="action-bar">
         <div className="actions">
-          <button className="ghost" onClick={() => setReviewOpen(true)}>评审对话</button>
+          <button className="ghost" onClick={() => { setChatStage(task.stage); setReviewOpen(true); }}>评审对话</button>
           <button className="primary" disabled={!canReview || running || busy} onClick={() => void approve()}>通过并创建 PR</button>
-          <button className="warn" disabled={!canReview || running || busy} onClick={() => setReviewOpen(true)}>要求修改</button>
+          <button className="warn" disabled={!canReview || running || busy} onClick={() => { setChatStage(task.stage); setReviewOpen(true); }}>要求修改</button>
           <button className="ghost" disabled={["DELIVERED", "CANCELLED", "FAILED"].includes(task.lifecycle) || busy} onClick={() => void cancel()}>取消任务</button>
         </div>
       </div>
@@ -93,6 +96,16 @@ export function TaskDetailPage() {
           <span>{task.budget.repairIterations}/{task.budget.maxRepairIterations} repair</span>
         </div>
       </div>
+
+      <FlowTimeline
+        task={task}
+        events={detail.events}
+        verifications={detail.verifications}
+        onAsk={(stage) => {
+          setChatStage(stage);
+          setReviewOpen(true);
+        }}
+      />
 
       <nav className="page-links">
         <Link to={`/tasks/${task.id}`} className="active">概览</Link>
@@ -171,6 +184,7 @@ export function TaskDetailPage() {
       <ReviewModal
         open={reviewOpen}
         detail={detail}
+        stage={chatStage}
         onClose={() => setReviewOpen(false)}
         onChanged={() => void refresh()}
         onOpenDiff={() => navigate(`/tasks/${task.id}/diff`)}

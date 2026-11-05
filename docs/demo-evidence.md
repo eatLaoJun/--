@@ -36,6 +36,30 @@ npm run demo:fix
 
 注意：Harness 自动执行测试/构建，不依赖模型自述“已通过”；测试失败会回到 REPAIR，预算耗尽则进入 `WAITING_INPUT`。
 
+## 1.1 事件中心 → 仓库定位 → 方案 → 修复
+
+命令：
+
+```bash
+npm run demo:incident
+```
+
+一次实际运行：
+
+| 字段 | 结果 |
+| --- | --- |
+| 事件 | `INC-2026-001` / `EVT-1001`（本地事件中心 fixture） |
+| service | `course-platform` |
+| 仓库定位 | `demo-course-service`（来自 `fixtures/event-center/projects.json`） |
+| 阶段 | `INGEST → RESOLVE → PLAN → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE` |
+| Plan | 根因假设、`Math.ceil` 方案、替代方案、测试计划、风险均写入 plan artifact |
+| Patch | `fcdb21ebc2d1...` |
+| 验证 | `node --test tests/pagination.test.js` exit 0 + build exit 0 |
+| PR | `PR-e48db47d79` |
+| Token / 工具 | 约 71k / 22 次 |
+
+阶段事件可在 Runtime log 看到：`incident_ingested`、`repository_resolved`、`plan_recorded`、`stage_advanced`、`tool_result`、`agent_turn`、`package_created`、`pr_created`、`delivered`。
+
 ## 2. 故障注入：PR 已创建但响应丢失
 
 命令：
