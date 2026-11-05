@@ -78,7 +78,7 @@ PAUSED / CANCELLING / CANCELLED / FAILED / DELIVERED
 - 回答必须引用当前 diff、验证记录、`file:line` 或 artifact；
 - **固定上下文**：完整任务时间线、任务概览、方案、变更包、diff、全部验证证据、PR、未解决 feedback、最近对话；
 - **一个全局“评审对话”按钮**，不再为每个阶段单独放问 AI；仓库代码按需只读检索；
-- **Runtime log 内嵌在阶段卡片里**：展开某个阶段即可看到该阶段的 `task_created`/`incident_ingested`/`repository_resolved`/`plan_recorded`/工具调用/验证事件；完整全局视图仍在“完整审计”页；
+- **Runtime log 是单一 Trajectory 页**：上方时间概览，下方按阶段/轮次/工具分组的 ledger；点击记录在右侧 inspector 查看输入/输出/原始事件；不再单独维护“完整事件流”页面；
 - **仓库不整仓注入**：需要时用 `read/grep/find/ls` 只读检索，避免 token 浪费、陈旧代码和无关文件干扰；没有读过的代码不能当作事实；
 - 对话历史和 patch 指纹一起持久化在 `tasks/<id>/review-chat.jsonl`；
 - 对话是弹窗形式，可随时打开/关闭；关闭不会中断正在生成回答，完成后可重新打开查看；

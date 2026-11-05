@@ -176,7 +176,7 @@ cat .forgepilot/tasks/$TASK/review-chat.jsonl
 | 7 | `src/store/*` | Task/Operation/Lease/Verification/Checkpoint |
 | 8 | `src/review/service.ts` + `src/web/server.ts` | 全局评审对话和 SSE |
 | 9 | `src/integrations/event-center.ts` + `project-binding.ts` | INGEST/RESOLVE 的可信配置 |
-| 10 | `web/src/pages/TimelinePage.tsx` + `components/FlowTimeline.tsx` | 整体时间线 + 阶段内嵌 Runtime log |
+| 10 | `web/src/pages/TimelinePage.tsx` + `components/TrajectoryView/Ledger/Overview/Inspector` + `trajectory/projection.ts` | 单一 Trajectory：时间概览 + ledger + inspector |
 
 ### 4.3 第三遍：改一处并做实验
 
@@ -464,8 +464,11 @@ delta / done / error
 **UI 细节**：
 
 - 多路由 React 工作台：Task Console、任务详情、Diff/证据、Runtime log / 审计时间线；
-- 整体阶段时间线在 Runtime log 页面顶部，阶段卡片内嵌该阶段日志；
-- 任务详情页不再单独放整体时间线；
+- Trajectory 页是单一视图：上方时间概览（阶段 band + 记录 tick），下方阶段/Agent turn/工具 ledger；
+- 任务详情页不再单独放整体时间线；全部在 Trajectory 页；
+- Trajectory 参考 dsh：同一份 projection 驱动时间概览和 ledger；
+- ledger 按阶段 / Agent turn / tool 分层，可折叠；
+- 点击记录打开右侧 inspector（输入/输出/原始事件）；
 - 评审对话是弹窗，可关闭/打开、Esc、点遮罩关闭；
 - 顶部操作栏 sticky；
 - 聊天向上阅读时不被轮询/流式 token 拉回底部；
@@ -770,7 +773,7 @@ FORGEPILOT_DEBUG_LEASE=1 npm run demo:fault
 [ ] 跑通 demo:incident / demo:review-chat
 [ ] 打开 UI，完成一次全局评审对话
 [ ] 看懂 events.jsonl 的 agent_settled / tool_call / tool_result / verification
-[ ] 读懂 Runtime log 页的整体时间线 + 阶段内嵌日志
+[ ] 读懂 dsh 风格 Trajectory：时间概览 + ledger + inspector
 [ ] 读完 session.ts
 [ ] 读完 extension.ts
 [ ] 读完 tools/index.ts

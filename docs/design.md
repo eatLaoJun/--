@@ -328,7 +328,7 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | `POST /api/tasks/:id/request-changes` | 写回意见并回到 REPAIR |
 | `POST /api/tasks/:id/cancel` | 取消并收敛 |
 
-页面结构（多路由，不是单页 tab）：`/` Task Console（阶段/生命周期/失败筛选、搜索）、`/tasks/:id` 概览与审批、`/tasks/:id/diff` 变更与验证证据、`/tasks/:id/timeline` 完整审计视图。整体时间线放在 `/tasks/:id/timeline`，不再单独放任务详情页；按阶段可收起，展开阶段后阶段卡片内嵌该阶段 Runtime log（事件按 `event.stage` 分组），下方保留完整事件流筛选。点击全局“评审对话”打开可关闭弹窗（Esc/遮罩/×），上下文为整条时间线+验证证据+按需读取仓库。轮询只刷新状态，SSE 只负责流式回答。
+页面结构（多路由，不是单页 tab）：`/` Task Console（阶段/生命周期/失败筛选、搜索）、`/tasks/:id` 概览与审批、`/tasks/:id/diff` 变更与验证证据、`/tasks/:id/timeline` Trajectory。Trajectory 参考 dsh 的轨迹设计：同一份 projection 驱动上方时间概览和下方 ledger；ledger 按阶段分组，阶段内按 Agent turn / 工具调用展开，阶段与轮次可折叠；点击记录打开右侧 inspector 查看输入、输出、artifact 和原始事件。点击全局“评审对话”打开可关闭弹窗（Esc/遮罩/×），上下文为整条时间线+验证证据+按需读取仓库。轮询只刷新状态，SSE 只负责流式回答。
 
 ### 8.5 GitHub issue 适配器
 
