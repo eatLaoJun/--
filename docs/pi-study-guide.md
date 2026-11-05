@@ -12,7 +12,7 @@
 | 遍数 | 目标 | 做什么 | 预计 |
 | --- | --- | --- | --- |
 | 第一遍 | 建立地图 | 跑通 demo、看 UI、看日志，不深究代码 | 30–45 分钟 |
-| 第二遍 | 读懂主链路 | 按第 4 节顺序读 8 个核心文件 | 2–3 小时 |
+| 第二遍 | 读懂主链路 | 按第 4 节顺序读 10 个核心文件 | 2–3 小时 |
 | 第三遍 | 能改能讲 | 做第 6 节实验，回答第 8 节自测题 | 3–5 小时 |
 
 不要从 `src/` 第一个文件开始顺序读。先跑，再读，最后改。
@@ -49,7 +49,7 @@ C:\Users\EDY\AppData\Roaming\npm\node_modules\@earendil-works\pi-coding-agent
 ```text
 ┌────────────────────────── 控制面（平台层，自己写） ──────────────────────────┐
 │ CLI / Web API / 任务列表 / 审批 / 取消                                      │
-│ Task 状态机：PREPARE → REPRODUCE → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE │
+│ Task 状态机：INGEST → RESOLVE → PLAN → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE │
 │ 持久化：Task / Checkpoint / ToolOperation / Verification / Lease / Artifact   │
 │ 评估：Review Precision/Recall、SWE-bench 双臂对照                            │
 └──────────────────────────────────┬───────────────────────────────────────────┘
@@ -94,17 +94,17 @@ npm run build
 - `npm run build`：通过；
 - 本机已配置 pi 模型（默认 `dsh/deepseek-v4.1-flash`）。
 
-先跑一遍主流程：
+先跑一遍事件中心主流程：
 
 ```bash
-npm run demo:review-chat
+npm run demo:incident
 ```
 
 观察输出里的：
 
-- issue 信息；
-- `PACKAGE / WAITING_APPROVAL`；
-- 两轮审核问答；
+- incident/service → repo 定位；
+- `INGEST → RESOLVE → PLAN → REPAIR → VERIFY → PACKAGE → PUBLISH → DONE`；
+- 结构化 Plan；
 - patchHash；
 - 最终 PR 和 `DONE / DELIVERED`。
 
@@ -135,6 +135,8 @@ npm run ui
 | `ModelRuntime` | `src/agent/session.ts`、`src/eval/review/judge.ts` | 模型/认证/独立 Judge | Lab 6 |
 | `AssistantMessageEvent` | `src/agent/ui-events.ts` | thinking/text delta 的 UI 传输 | Lab 2 |
 | `ToolExecution*Event` | `src/agent/ui-events.ts` | 工具开始/更新/结束的 UI trace | Lab 2 |
+| `record_plan` 工具 | `src/agent/tools/index.ts` + `src/harness/runtime.ts` | PLAN 阶段产出结构化方案 | Lab 3.5 |
+| 事件中心 / 项目绑定 | `src/integrations/event-center.ts`、`project-binding.ts` | INGEST/RESOLVE 的确定性入口 | Lab 3.5 |
 
 ---
 
@@ -142,9 +144,10 @@ npm run ui
 
 ### 4.1 第一遍：跑通并看事件（30–45 分钟）
 
-1. `npm run demo:review-chat`
-2. `npm run ui`，打开任务，点“评审对话”，问两个问题
-3. 看事件日志：
+1. `npm run demo:incident`
+2. `npm run ui`，打开任务 → Runtime log / 审计时间线，展开阶段看内嵌日志
+3. 点全局“评审对话”，问两个问题
+4. 看事件日志：
 
 ```bash
 TASK=<taskId>
@@ -158,7 +161,7 @@ cat .forgepilot/tasks/$TASK/review-chat.jsonl
 - `tool_call` / `verification` / `changes_requested` / `approved` / `pr_created`；
 - 对话消息里的 `meta.tools` 和 `thinkingChars`。
 
-### 4.2 第二遍：精读 8 个文件
+### 4.2 第二遍：精读 10 个文件
 
 按顺序：
 
@@ -166,12 +169,14 @@ cat .forgepilot/tasks/$TASK/review-chat.jsonl
 | --- | --- | --- |
 | 1 | `src/agent/session.ts` | `createModelContext`、`runPiStageAgent` |
 | 2 | `src/agent/extension.ts` | 5 个 `pi.on` 钩子 |
-| 3 | `src/agent/tools/index.ts` | 14 个 `defineTool` 工具 |
-| 4 | `src/harness/orchestrator.ts` | `run`、`runRepair`、`requestChanges` |
+| 3 | `src/agent/tools/index.ts` | 15 个 `defineTool` 工具（含 `record_plan`） |
+| 4 | `src/harness/orchestrator.ts` | `run`、`runIngest`、`runResolve`、`runPlan`、`runRepair`、`requestChanges` |
 | 5 | `src/harness/runtime.ts` | `applyChanges`、`runVerification`、`createPr`、`recover` |
 | 6 | `src/context/assembler.ts` | `assemble` 的裁剪顺序 |
 | 7 | `src/store/*` | Task/Operation/Lease/Verification/Checkpoint |
-| 8 | `src/review/service.ts` + `src/web/server.ts` | Review Chat 和 SSE |
+| 8 | `src/review/service.ts` + `src/web/server.ts` | 全局评审对话和 SSE |
+| 9 | `src/integrations/event-center.ts` + `project-binding.ts` | INGEST/RESOLVE 的可信配置 |
+| 10 | `web/src/pages/TimelinePage.tsx` + `components/FlowTimeline.tsx` | 整体时间线 + 阶段内嵌 Runtime log |
 
 ### 4.3 第三遍：改一处并做实验
 
@@ -373,7 +378,7 @@ sha256(taskId | opType | target | inputHash | version)
 
 ---
 
-## 5.6 Review Chat
+## 5.6 全局评审对话（Review Chat）
 
 **文件**：`src/review/service.ts`、`src/review/prompt.ts`
 
@@ -386,14 +391,18 @@ read / grep / find / ls / read_artifact / get_change_summary / get_task_status /
 **固定上下文**：
 
 ```text
+完整任务时间线（最多 160 条事件摘要）
 ticket / expected / issue
+结构化 Plan
 patchHash / changed files / diffStat / rationale
 diff 摘录
-verification 命令、exitCode、keyOutput、artifact
+全部验证记录（最近 8 条，含命令、exitCode、keyOutput、artifact）
 PR 状态
 未解决 feedback
 最近 16 条对话
 ```
+
+对话是**全局一个按钮**，不绑定某个阶段；任务执行中、等待审批、暂停、失败、已交付都可以问。
 
 **仓库上下文策略**：
 
@@ -432,9 +441,13 @@ PR 状态
 
 | 路由 | 作用 |
 | --- | --- |
-| `GET /api/issues` | issue fixture |
-| `POST /api/tasks` | 创建任务并后台执行 |
+| `GET /api/incidents` | 事件中心 incident fixture |
+| `GET /api/issues` | GitHub issue fixture |
+| `POST /api/tasks` | 从 incident/issue/ticket 创建任务并后台执行 |
+| `GET /api/tasks?stage=&lifecycle=&failed=&q=` | 任务筛选 |
 | `GET /api/tasks/:id` | task + diff + verification + events + chat |
+| `GET /api/tasks/:id/events` | 事件时间线 |
+| `GET /api/artifacts/:id` | 完整日志/patch artifact |
 | `POST /api/tasks/:id/chat` | SSE 流式回答 |
 | `POST /api/tasks/:id/approve` | 审批并发布 |
 | `POST /api/tasks/:id/request-changes` | 退回 REPAIR |
@@ -450,7 +463,9 @@ delta / done / error
 
 **UI 细节**：
 
-- 多路由 React 工作台：Task Console、任务详情、Diff/证据、完整审计；阶段卡片内嵌该阶段 Runtime log；
+- 多路由 React 工作台：Task Console、任务详情、Diff/证据、Runtime log / 审计时间线；
+- 整体阶段时间线在 Runtime log 页面顶部，阶段卡片内嵌该阶段日志；
+- 任务详情页不再单独放整体时间线；
 - 评审对话是弹窗，可关闭/打开、Esc、点遮罩关闭；
 - 顶部操作栏 sticky；
 - 聊天向上阅读时不被轮询/流式 token 拉回底部；
@@ -707,17 +722,18 @@ FORGEPILOT_DEBUG_LEASE=1 npm run demo:fault
 
 ### 9.1 一分钟版本
 
-> ForgePilot 不是让模型直接接管研发流程，而是把 Bug 修复放进可控闭环。底层用 pi 的 Agent Runtime 做模型—工具循环和流式事件；平台层自己实现阶段状态机、工具权限、上下文分层压缩、检查点/幂等键/租约、PR 交付和两套评估。修复完成后工程师可以在工作台里和 Agent 对话，问它为什么这样改；要求修改会回到 REPAIR 并重新验证，未解决意见不能审批。
+> ForgePilot 不是让模型直接接管研发流程，而是把 Bug 修复放进可控闭环。事件中心进入后，先做仓库定位和结构化方案，再让底层 pi 的 Agent Runtime 执行模型—工具循环和流式事件；平台层自己实现阶段状态机、工具权限、上下文分层压缩、检查点/幂等键/租约、PR 交付和两套评估。工程师在工作台里可以随时和 Agent 对话，问它为什么这样改；要求修改会回到 REPAIR 并重新验证，未解决意见不能审批。
 
 ### 9.2 三分钟版本（按这条线讲）
 
-1. 问题：Bug 从工单到 PR，不只是改代码；
+1. 问题：Bug 从事件中心到 PR，不只是改代码；
 2. 分工：pi 只做执行循环，平台做状态/权限/证据；
-3. 上下文：预算驱动、结构化状态、artifact 回读；
-4. 可靠：检查点、幂等键、租约、外部结果核对；
-5. 审核：只读对话 + 要求修改 + 审批门禁；
-6. 评估：Review P/R + SWE-bench 双臂；
-7. 边界：本地适配器/生产化清单，不夸大规模数字。
+3. 入口：INGEST 读事件，RESOLVE 查可信仓库映射，PLAN 产出结构化方案；
+4. 上下文：预算驱动、结构化状态、artifact 回读；
+5. 可靠：检查点、幂等键、租约、外部结果核对；
+6. 审核：全局只读对话 + 要求修改 + 审批门禁；
+7. 评估：Review P/R + SWE-bench 双臂；
+8. 边界：本地适配器/生产化清单，不夸大规模数字。
 
 ### 9.3 不要说的话
 
@@ -751,18 +767,21 @@ FORGEPILOT_DEBUG_LEASE=1 npm run demo:fault
 
 ```text
 [ ] 跑通 npm test / npm run build
-[ ] 跑通 demo:review-chat
-[ ] 打开 UI，完成一次弹窗对话
-[ ] 看懂 events.jsonl 的 agent_settled / tool_call / verification
+[ ] 跑通 demo:incident / demo:review-chat
+[ ] 打开 UI，完成一次全局评审对话
+[ ] 看懂 events.jsonl 的 agent_settled / tool_call / tool_result / verification
+[ ] 读懂 Runtime log 页的整体时间线 + 阶段内嵌日志
 [ ] 读完 session.ts
 [ ] 读完 extension.ts
 [ ] 读完 tools/index.ts
-[ ] 读完 orchestrator.ts 的 runRepair
+[ ] 读完 orchestrator.ts 的 runIngest / runResolve / runPlan / runRepair
 [ ] 读完 runtime.ts 的 applyChanges / recover
 [ ] 读完 context/assembler.ts
+[ ] 读完 event-center.ts / project-binding.ts
 [ ] 做完 Lab 1（prompt/白名单）
 [ ] 做完 Lab 2（thinking/tool 事件）
 [ ] 做完 Lab 3（新增工具）
+[ ] 做完 Lab 3.5（事件中心 → 方案）
 [ ] 做完 Lab 4（故障注入）
 [ ] 做完 Lab 5（上下文预算）
 [ ] 做完 Lab 6（Review 评估）
@@ -780,6 +799,6 @@ FORGEPILOT_DEBUG_LEASE=1 npm run demo:fault
 
 1. 先把 Lab 1–5 做完，理解执行链路；
 2. 再读 `src/eval/review` 和 `src/eval/swebench`，理解评估口径；
-3. 最后再考虑 React 工作台、真实 GitHub/GitLab 适配器、Docker 沙箱。
+3. 最后再考虑真实 GitHub/GitLab/事件中心适配器、Docker 沙箱、M2–M5 路线图。
 
 不要一开始就改 UI 或接真实外部系统；先把“状态、工具、上下文、证据”四件事跑通。
