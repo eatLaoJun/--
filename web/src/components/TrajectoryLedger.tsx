@@ -134,26 +134,54 @@ export function TrajectoryLedger({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
+  const recordCount = stages.reduce((count, stage) => count + stage.records.length, 0);
+  const previousCount = useRef(recordCount);
+  const initialized = useRef(false);
 
-  useEffect(() => {
-    if (!follow) return;
+  function scrollToBottom() {
     const box = boxRef.current;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [stages, follow]);
+  }
+
+  function scrollToTarget(target: Element | null, block: "start" | "center") {
+    const box = boxRef.current;
+    if (!box || !target) return;
+    const boxRect = box.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const offset =
+      block === "center"
+        ? (box.clientHeight - targetRect.height) / 2
+        : 8;
+    box.scrollTo({
+      top: box.scrollTop + (targetRect.top - boxRect.top) - offset,
+      behavior: "auto",
+    });
+  }
+
+  useEffect(() => {
+    // Open at the tail once, then only follow when new records actually arrive.
+    // Polling/re-renders with the same data must not reset the reader's scroll position.
+    if (!initialized.current) {
+      initialized.current = true;
+      previousCount.current = recordCount;
+      if (follow) scrollToBottom();
+      return;
+    }
+    if (follow && recordCount > previousCount.current) scrollToBottom();
+    previousCount.current = recordCount;
+  }, [recordCount, follow]);
 
   useEffect(() => {
     const box = boxRef.current;
     if (!box || !focusRecordId) return;
-    const target = box.querySelector(`[data-record-id="${CSS.escape(focusRecordId)}"]`);
-    target?.scrollIntoView({ block: "center" });
-  }, [focusRecordId, stages]);
+    scrollToTarget(box.querySelector(`[data-record-id="${CSS.escape(focusRecordId)}"]`), "center");
+  }, [focusRecordId]);
 
   useEffect(() => {
     const box = boxRef.current;
     if (!box || !focusStage) return;
-    const target = box.querySelector(`[data-stage="${CSS.escape(focusStage)}"]`);
-    target?.scrollIntoView({ block: "start" });
-  }, [focusStage, stages]);
+    scrollToTarget(box.querySelector(`[data-stage="${CSS.escape(focusStage)}"]`), "start");
+  }, [focusStage]);
 
   function onScroll() {
     const box = boxRef.current;
@@ -202,8 +230,7 @@ export function TrajectoryLedger({
           className="scroll-bottom trajectory-follow"
           onClick={() => {
             setFollow(true);
-            const box = boxRef.current;
-            if (box) box.scrollTop = box.scrollHeight;
+            scrollToBottom();
           }}
         >
           ↓ 跟随最新
