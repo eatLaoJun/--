@@ -46,6 +46,7 @@
               <div id="task-meta" class="meta"></div>
             </div>
             <div class="actions">
+              <button id="chat-btn" class="ghost">评审对话 <span id="chat-count" class="count"></span></button>
               <button id="approve-btn" class="primary">通过并创建 PR</button>
               <button id="changes-btn" class="warn">要求修改</button>
               <button id="cancel-btn" class="ghost">取消任务</button>
@@ -58,25 +59,42 @@
             <button data-tab="overview" class="active">概览</button>
             <button data-tab="diff">变更</button>
             <button data-tab="evidence">证据</button>
-            <button data-tab="chat">评审对话 <span id="chat-count" class="count"></span></button>
           </nav>
 
           <section id="tab-overview" class="tab-panel"></section>
           <section id="tab-diff" class="tab-panel" hidden></section>
           <section id="tab-evidence" class="tab-panel" hidden></section>
-          <section id="tab-chat" class="tab-panel chat-panel" hidden>
-            <div id="chat-messages" class="chat-messages"></div>
-            <button id="scroll-bottom" class="scroll-bottom" hidden>↓ 最新消息</button>
-            <div class="composer">
-              <textarea id="chat-input" rows="3" placeholder="问点具体的：为什么用 Math.ceil？这个改动会影响非整除场景吗？"></textarea>
-              <div class="composer-actions">
-                <span class="hint">Enter 发送 · Shift+Enter 换行</span>
+        </div>
+      </main>
+    </div>
+
+    <div id="chat-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-close-chat></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
+        <header class="modal-head">
+          <div>
+            <h3 id="chat-modal-title">评审对话</h3>
+            <p id="chat-modal-subtitle" class="hint"></p>
+          </div>
+          <button id="close-chat" class="icon-btn" aria-label="关闭评审对话">×</button>
+        </header>
+        <div id="chat-context" class="context-strip"></div>
+        <div class="chat-panel">
+          <div id="chat-messages" class="chat-messages modal-chat"></div>
+          <button id="scroll-bottom" class="scroll-bottom" hidden>↓ 最新消息</button>
+          <div class="composer">
+            <textarea id="chat-input" rows="3" placeholder="问点具体的：为什么用 Math.ceil？这个改动会影响非整除场景吗？"></textarea>
+            <div class="composer-actions">
+              <span class="hint">固定上下文：任务概览 + diff + 验证证据；仓库代码按需只读检索</span>
+              <div class="composer-buttons">
+                <button id="modal-changes-btn" class="warn">要求修改</button>
+                <button id="modal-approve-btn" class="ghost">通过</button>
                 <button id="send-btn" class="primary">发送</button>
               </div>
             </div>
-          </section>
+          </div>
         </div>
-      </main>
+      </section>
     </div>
     <div id="toast" class="toast"></div>
     <script type="module" src="/app.js"></script>

@@ -250,7 +250,8 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | 不能改码 | 工具白名单只有 `read/grep/find/ls/read_artifact/get_change_summary/get_task_status/get_pr_status` |
 | 必须引用证据 | 系统提示词要求从 diff、验证记录、`file:line`、artifact 回答 |
 | 不碰外部状态 | 没有 `apply_patch/publish_branch/create_pr` |
-| 上下文可追溯 | 每轮注入 ticket、patchHash、changed files、verification key output、diff 摘录、最近 16 条对话 |
+| 上下文可追溯 | 每轮注入 ticket、patchHash、changed files、verification key output、diff 摘录、PR、未解决 feedback、最近 16 条对话 |
+| 仓库上下文 | 不整仓注入；通过 `read/grep/find/ls` 按需只读检索，未读代码不能当事实 |
 | 可审计 | 对话追加到 `tasks/<id>/review-chat.jsonl`，带角色、时间、模型、patchHash |
 | 过程可见 | `thinking_start/delta/end` 与 `tool_execution_start/update/end` 通过 SSE 推给工作台；回答结束后持久化工具 trace 摘要 |
 | 预算隔离 | 对话 usage 进入 metrics，但不增加 `budget.tokensUsed/toolCallsUsed`，避免耗尽修复预算 |
@@ -287,7 +288,7 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | `POST /api/tasks/:id/request-changes` | 写回意见并回到 REPAIR |
 | `POST /api/tasks/:id/cancel` | 取消并收敛 |
 
-页面结构：左侧任务列表 + Issue 创建；右侧概览、diff、证据、评审对话；底部“通过并创建 PR / 要求修改 / 取消”。轮询只刷新状态，SSE 只负责流式回答。
+页面结构：左侧任务列表 + Issue 创建；右侧概览、diff、证据；点击“评审对话”打开可关闭的弹窗（Esc/遮罩/×）。弹窗内显示固定上下文 chips、聊天记录、thinking/tool trace、输入框和“要求修改/通过/发送”。轮询只刷新状态，SSE 只负责流式回答。
 
 ### 8.5 GitHub issue 适配器
 

@@ -72,7 +72,10 @@ PAUSED / CANCELLING / CANCELLED / FAILED / DELIVERED
 - 工具白名单只有 `read/grep/find/ls/read_artifact/get_change_summary/get_task_status/get_pr_status`；
 - 不能改码、改测试、推分支或创建 PR；
 - 回答必须引用当前 diff、验证记录、`file:line` 或 artifact；
+- **固定上下文**：任务概览、变更包、diff、验证证据、PR、未解决 feedback、最近对话；
+- **仓库不整仓注入**：需要时用 `read/grep/find/ls` 只读检索，避免 token 浪费、陈旧代码和无关文件干扰；没有读过的代码不能当作事实；
 - 对话历史和 patch 指纹一起持久化在 `tasks/<id>/review-chat.jsonl`；
+- 对话是弹窗形式，可随时打开/关闭；关闭不会中断正在生成回答，完成后可重新打开查看；
 - **展示 pi 的思考与工具事件**：`thinking_start/delta/end` 流式显示“思考过程”，`tool_execution_start/update/end` 显示工具名、参数摘要、耗时和结果；每轮回答保存工具 trace 摘要；
 - 思考过程是否出现取决于模型/Provider 是否返回 reasoning 事件；没有 reasoning 的模型只显示文本和工具；
 - 审核对话的 Token 计入 metrics，但不消耗修复阶段的 Token/工具调用预算，避免“问几个问题就没预算改码”。
@@ -90,7 +93,7 @@ npm run ui
 # 浏览器打开 http://127.0.0.1:4310
 ```
 
-左侧从 GitHub issue fixture 创建任务，执行完成后在“评审对话”页提问；右侧可查看概览、diff、验证证据和交付状态。当前是轻量原生 Web 工作台，React 版本可以后续替换。
+左侧从 GitHub issue fixture 创建任务，执行完成后点击右上角“评审对话”打开弹窗提问；弹窗支持关闭、Esc、点击遮罩关闭，也可以直接在里面“要求修改”或“通过”。主页面可查看概览、diff、验证证据和交付状态。当前是轻量原生 Web 工作台，React 版本可以后续替换。
 
 ### GitHub issue 输入
 

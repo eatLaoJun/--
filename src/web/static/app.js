@@ -9,6 +9,7 @@ const state = {
   poll: undefined,
   chatAutoScroll: true,
   lastChatSignature: null,
+  chatOpen: false,
 };
 
 async function api(path, options = {}) {
@@ -114,6 +115,8 @@ async function selectTask(taskId) {
   state.tab = "overview";
   state.lastChatSignature = null;
   state.chatAutoScroll = true;
+  state.chatOpen = false;
+  $("#chat-modal").hidden = true;
   await loadDetail();
   renderTabs();
 }
@@ -146,9 +149,15 @@ function renderDetail() {
 
   const running = detail.running || state.streaming;
   const canReview = task.lifecycle === "WAITING_APPROVAL";
+  const canChat = ["WAITING_APPROVAL", "WAITING_INPUT", "PAUSED", "FAILED", "DELIVERED"].includes(task.lifecycle);
   $("#approve-btn").disabled = !canReview || running;
   $("#changes-btn").disabled = !canReview || running || state.streaming;
   $("#cancel-btn").disabled = ["DELIVERED", "CANCELLED", "FAILED"].includes(task.lifecycle) || state.streaming;
+  $("#send-btn").disabled = !canChat || state.streaming;
+  $("#chat-input").disabled = !canChat || state.streaming;
+  $("#modal-changes-btn").disabled = !canReview || running || state.streaming;
+  $("#modal-approve-btn").disabled = !canReview || running || state.streaming;
+  $("#chat-btn").classList.toggle("attention", hasUnresolvedFeedback(task));
 
   $("#statusbar").innerHTML = `
     <div class="status-left">
@@ -169,6 +178,7 @@ function renderDetail() {
 
   const chatCount = (detail.chat || []).filter((message) => message.role !== "system").length;
   $("#chat-count").textContent = chatCount ? String(chatCount) : "";
+  if (state.chatOpen) renderChatContext(task, detail);
 }
 
 function card(title, content, extra = "") {
@@ -295,7 +305,7 @@ function updateScrollButton() {
   const box = $("#chat-messages");
   const button = $("#scroll-bottom");
   if (!box || !button) return;
-  button.hidden = state.tab !== "chat" || isNearBottom(box);
+  button.hidden = !state.chatOpen || isNearBottom(box);
 }
 
 function scrollChatToBottom(smooth = false) {
@@ -320,7 +330,51 @@ function renderToolTrace(tools) {
     "</div>";
 }
 
-function renderChat(history) {
+function hasUnresolvedFeedback(task) {
+  return (task.feedback || []).some((item) => !item.resolvedAt);
+}
+
+function renderChatContext(task, detail) {
+  const latestTest = [...(detail.verifications || [])].reverse().find((item) => item.kind === "test");
+  $("#chat-modal-subtitle").textContent =
+    `${task.ticketId} · ${task.stage}/${task.lifecycle} · patch ${shortHash(task.changePackage?.patchHash ?? task.patchHash)}`;
+  const chips = [
+    `patch ${shortHash(task.changePackage?.patchHash ?? task.patchHash)}`,
+    `${(task.changePackage?.changedFiles || []).length || 1} file`,
+    latestTest ? `${latestTest.id} · exit ${latestTest.exitCode}` : "no verification",
+    "repo: on-demand read-only",
+  ];
+  $("#chat-context").innerHTML = chips
+    .map((text) => `<span class="context-chip">${escapeHtml(text)}</span>`)
+    .join("");
+}
+
+function openChat() {
+  if (!state.detail) return;
+  state.chatOpen = true;
+  $("#chat-modal").hidden = false;
+  renderChatContext(state.detail.task, state.detail);
+  if (!state.streaming) renderChat(state.detail.chat, true);
+  scrollChatToBottom();
+  setTimeout(() => $("#chat-input")?.focus(), 30);
+}
+
+function closeChat() {
+  state.chatOpen = false;
+  $("#chat-modal").hidden = true;
+  updateScrollButton();
+}
+
+function openChanges() {
+  if (!state.chatOpen) {
+    openChat();
+    toast("在弹窗里写下要改的内容，再点“要求修改”");
+    return;
+  }
+  requestChanges();
+}
+
+function renderChat(history, force = false) {
   const box = $("#chat-messages");
   if (state.streaming && box.querySelector(".streaming")) {
     // Keep the streaming bubble while deltas arrive.
@@ -332,7 +386,7 @@ function renderChat(history) {
         `${message.id}:${message.at}:${String(message.content).length}:${message.meta?.tools?.length ?? 0}`,
     )
     .join("|");
-  if (signature === state.lastChatSignature && !state.streaming) return;
+  if (signature === state.lastChatSignature && !state.streaming && !force) return;
   state.lastChatSignature = signature;
 
   const wasNearBottom = isNearBottom(box);
@@ -378,7 +432,7 @@ function renderTabs() {
   for (const button of document.querySelectorAll(".tabs button")) {
     button.classList.toggle("active", button.dataset.tab === state.tab);
   }
-  for (const name of ["overview", "diff", "evidence", "chat"]) {
+  for (const name of ["overview", "diff", "evidence"]) {
     $(`#tab-${name}`).hidden = name !== state.tab;
   }
 }
@@ -402,7 +456,7 @@ async function createTask() {
 async function sendChat() {
   const input = $("#chat-input");
   const message = input.value.trim();
-  if (!message || state.streaming || !state.selectedId) return;
+  if (!message || state.streaming || !state.selectedId || !state.chatOpen) return;
   input.value = "";
   state.streaming = true;
   state.chatAutoScroll = true;
@@ -566,13 +620,21 @@ function bind() {
   $("#refresh").addEventListener("click", poll);
   $("#send-btn").addEventListener("click", sendChat);
   $("#approve-btn").addEventListener("click", approve);
-  $("#changes-btn").addEventListener("click", requestChanges);
+  $("#changes-btn").addEventListener("click", openChanges);
+  $("#modal-changes-btn").addEventListener("click", requestChanges);
+  $("#modal-approve-btn").addEventListener("click", approve);
   $("#cancel-btn").addEventListener("click", cancelTask);
   $("#scroll-bottom").addEventListener("click", () => scrollChatToBottom(true));
   $("#chat-messages").addEventListener("scroll", () => {
     const box = $("#chat-messages");
     state.chatAutoScroll = isNearBottom(box);
     updateScrollButton();
+  });
+  $("#chat-btn").addEventListener("click", openChat);
+  $("#close-chat").addEventListener("click", closeChat);
+  document.querySelector("[data-close-chat]").addEventListener("click", closeChat);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.chatOpen) closeChat();
   });
   $("#chat-input").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -584,10 +646,7 @@ function bind() {
     button.addEventListener("click", () => {
       state.tab = button.dataset.tab;
       renderTabs();
-      if (state.tab === "chat") {
-        $("#chat-input")?.focus();
-        updateScrollButton();
-      }
+
     });
   }
 }
