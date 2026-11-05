@@ -16,15 +16,12 @@ interface ToolTrace {
 interface Props {
   open: boolean;
   detail: TaskDetail;
-  stage?: string;
   onClose: () => void;
   onChanged: () => void;
   onOpenDiff: () => void;
 }
 
-const CHAT_LIFECYCLES = ["WAITING_APPROVAL", "WAITING_INPUT", "PAUSED", "FAILED", "DELIVERED"];
-
-export function ReviewModal({ open, detail, stage, onClose, onChanged, onOpenDiff }: Props) {
+export function ReviewModal({ open, detail, onClose, onChanged, onOpenDiff }: Props) {
   const task = detail.task;
   const [messages, setMessages] = useState<ReviewMessage[]>(detail.chat);
   const [input, setInput] = useState("");
@@ -38,9 +35,7 @@ export function ReviewModal({ open, detail, stage, onClose, onChanged, onOpenDif
   const autoScroll = useRef(true);
   const abortRef = useRef<AbortController>();
 
-  const canChat = stage
-    ? !["CANCELLED", "CANCELLING"].includes(task.lifecycle)
-    : CHAT_LIFECYCLES.includes(task.lifecycle);
+  const canChat = !["CANCELLED", "CANCELLING"].includes(task.lifecycle);
   const canReview = task.lifecycle === "WAITING_APPROVAL";
   const latestTest = [...detail.verifications].reverse().find((item) => item.kind === "test");
 
@@ -115,7 +110,7 @@ export function ReviewModal({ open, detail, stage, onClose, onChanged, onOpenDif
       const response = await fetch(`/api/tasks/${encodeURIComponent(task.id)}/chat`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: question, stage }),
+        body: JSON.stringify({ message: question }),
         signal: controller.signal,
       });
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
@@ -234,7 +229,7 @@ export function ReviewModal({ open, detail, stage, onClose, onChanged, onOpenDif
           <div>
             <h3 id="review-title">评审对话</h3>
             <p className="hint">
-              {task.ticketId} · {stage ?? task.stage}/{task.lifecycle} · patch{" "}
+              {task.ticketId} · {task.stage}/{task.lifecycle} · patch{" "}
               {shortHash(task.changePackage?.patchHash ?? task.patchHash)}
             </p>
           </div>
@@ -242,7 +237,7 @@ export function ReviewModal({ open, detail, stage, onClose, onChanged, onOpenDif
         </header>
 
         <div className="context-strip">
-          <span className="context-chip">stage {stage ?? task.stage}</span>
+          <span className="context-chip">stage {task.stage}</span>
           <span className="context-chip">patch {shortHash(task.changePackage?.patchHash ?? task.patchHash)}</span>
           <span className="context-chip">{task.changePackage?.changedFiles.length || 1} file</span>
           <span className="context-chip">{latestTest ? `${latestTest.id} · exit ${latestTest.exitCode}` : "no verification"}</span>

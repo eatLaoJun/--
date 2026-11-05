@@ -55,7 +55,7 @@ INGEST → RESOLVE → PLAN → REPAIR → VERIFY → PACKAGE → PUBLISH → DO
 - RESOLVE 从 `fixtures/event-center/projects.json` 读取授权映射，模型不能猜仓库；
 - PLAN 只读，不允许 `apply_patch`，必须调用 `record_plan`；
 - REPAIR 读取 Plan，不能无故偏离方案；
-- 每个阶段都可以打开只读 Ask AI，但改状态必须走显式门禁。
+- 保留一个全局只读“评审对话”，上下文是整条任务时间线 + 验证证据 + 仓库按需读取；改状态必须走显式门禁。
 
 生命周期与阶段正交：
 
@@ -290,7 +290,7 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | 不能改码 | 工具白名单只有 `read/grep/find/ls/read_artifact/get_change_summary/get_task_status/get_pr_status` |
 | 必须引用证据 | 系统提示词要求从 diff、验证记录、`file:line`、artifact 回答 |
 | 不碰外部状态 | 没有 `apply_patch/publish_branch/create_pr` |
-| 上下文可追溯 | 每轮注入 ticket、patchHash、changed files、verification key output、diff 摘录、PR、未解决 feedback、最近 16 条对话 |
+| 上下文可追溯 | 每轮注入完整任务时间线、ticket、patchHash、changed files、全部验证记录、diff 摘录、PR、未解决 feedback、最近 16 条对话 |
 | 仓库上下文 | 不整仓注入；通过 `read/grep/find/ls` 按需只读检索，未读代码不能当事实 |
 | 可审计 | 对话追加到 `tasks/<id>/review-chat.jsonl`，带角色、时间、模型、patchHash |
 | 过程可见 | `thinking_start/delta/end` 与 `tool_execution_start/update/end` 通过 SSE 推给工作台；回答结束后持久化工具 trace 摘要 |

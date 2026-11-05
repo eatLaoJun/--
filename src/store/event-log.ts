@@ -1,5 +1,5 @@
 import path from "node:path";
-import { appendJsonl } from "../utils/paths.js";
+import { appendJsonl, readJsonl } from "../utils/paths.js";
 
 export interface TraceEvent {
   at: number;
@@ -18,5 +18,9 @@ export class EventLog {
 
   async append(event: Omit<TraceEvent, "at"> & { at?: number }): Promise<void> {
     await appendJsonl(this.file(event.taskId), { at: event.at ?? Date.now(), ...event });
+  }
+
+  async list(taskId: string): Promise<TraceEvent[]> {
+    return readJsonl<TraceEvent>(this.file(taskId));
   }
 }

@@ -76,7 +76,8 @@ PAUSED / CANCELLING / CANCELLED / FAILED / DELIVERED
 - 工具白名单只有 `read/grep/find/ls/read_artifact/get_change_summary/get_task_status/get_pr_status`；
 - 不能改码、改测试、推分支或创建 PR；
 - 回答必须引用当前 diff、验证记录、`file:line` 或 artifact；
-- **固定上下文**：任务概览、变更包、diff、验证证据、PR、未解决 feedback、最近对话；
+- **固定上下文**：完整任务时间线、任务概览、方案、变更包、diff、全部验证证据、PR、未解决 feedback、最近对话；
+- **一个全局“评审对话”按钮**，不再为每个阶段单独放问 AI；仓库代码按需只读检索；
 - **仓库不整仓注入**：需要时用 `read/grep/find/ls` 只读检索，避免 token 浪费、陈旧代码和无关文件干扰；没有读过的代码不能当作事实；
 - 对话历史和 patch 指纹一起持久化在 `tasks/<id>/review-chat.jsonl`；
 - 对话是弹窗形式，可随时打开/关闭；关闭不会中断正在生成回答，完成后可重新打开查看；
@@ -97,7 +98,7 @@ npm run ui
 # 浏览器打开 http://127.0.0.1:4310
 ```
 
-左侧从 GitHub issue fixture 创建任务，执行完成后点击右上角“评审对话”打开弹窗提问；弹窗支持关闭、Esc、点击遮罩关闭，也可以直接在里面“要求修改”或“通过”。
+左侧从事件中心 / GitHub issue 创建任务，任意阶段都可以点击右上角“评审对话”打开弹窗提问；对话上下文是整条任务时间线 + 验证证据，仓库代码按需只读读取。弹窗支持关闭、Esc、点击遮罩关闭，也可以直接在里面“要求修改”或“通过”。
 
 当前是多页面 React 工作台（Vite + React Router + SSE），不是单页 tab：
 
@@ -273,7 +274,7 @@ npm test
 - 补丁落盘后崩溃恢复、PR 响应丢失恢复、验证指纹失效；
 - `git diff` 指纹跨 commit 稳定、changedFiles 路径正确；
 - SWE-bench 双臂执行、隐藏测试后置、空补丁不判 resolved；
-- 事件中心 incident → INGEST/RESOLVE/PLAN 任务、项目绑定、整体流程时间线、per-stage Ask AI、React 路由、任务筛选、事件时间线 API、SPA fallback。
+- 事件中心 incident → INGEST/RESOLVE/PLAN 任务、项目绑定、整体流程时间线、全局评审对话（整条时间线上下文 + 仓库按需读取）、React 路由、任务筛选、事件时间线 API、SPA fallback。
 
 ## 11. 面试一句话
 

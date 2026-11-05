@@ -75,6 +75,24 @@ test("review prompt carries diff, verification, history and unresolved feedback"
     assert.match(prompt, /请解释边界条件/);
     assert.match(prompt, /非整除会受影响吗/);
     assert.match(prompt, /为什么这样改/);
+    const timelinePrompt = buildReviewPrompt({
+      task,
+      history: [],
+      question: "这个任务经历了哪些阶段？",
+      diff: "+ return Math.ceil(total / pageSize);",
+      verification,
+      verifications: [verification],
+      events: [
+        { at: Date.now(), taskId: task.id, type: "incident_ingested", stage: "INGEST", detail: { service: "course-platform" } },
+        { at: Date.now(), taskId: task.id, type: "repository_resolved", stage: "RESOLVE", detail: { repoName: "demo-course-service", baseCommit: "abc", branch: "fix" } },
+        { at: Date.now(), taskId: task.id, type: "plan_recorded", stage: "PLAN", detail: { artifactId: "a".repeat(64), filesToChange: ["src/pagination.js"] } },
+      ],
+      stage: undefined,
+    });
+    assert.match(timelinePrompt, /<task_timeline>/);
+    assert.match(timelinePrompt, /repository_resolved/);
+    assert.match(timelinePrompt, /demo-course-service/);
+    assert.match(timelinePrompt, /<verification_records>/);
     assert.match(buildReviewSystemPrompt(task), /Read-only/);
     assert.match(buildReviewSystemPrompt(task), /要求修改/);
   } finally {

@@ -43,12 +43,6 @@ export class ReviewChatService {
     if (task.cancelRequested || task.lifecycle === "CANCELLED") {
       throw new Error(`Task ${taskId} is cancelled`);
     }
-    if (!stage && !["WAITING_APPROVAL", "WAITING_INPUT", "PAUSED", "FAILED", "DELIVERED"].includes(task.lifecycle)) {
-      throw new Error(
-        "Review chat is available after the patch is packaged (WAITING_APPROVAL) or delivered. " +
-          "The task is currently " + task.lifecycle + ".",
-      );
-    }
     const trimmed = question.trim();
     if (!trimmed) throw new Error("Question must not be empty");
 
@@ -56,11 +50,19 @@ export class ReviewChatService {
     await this.stores.reviewChat.append({ taskId, role: "engineer", content: trimmed, meta: { stage } });
 
     const diff = await this.loadDiff(task);
-    const verification = (await this.stores.verifications.list(taskId))
-      .slice()
-      .reverse()
-      .find((record) => record.kind === "test");
-    const prompt = buildReviewPrompt({ task, history, question: trimmed, diff, verification, stage });
+    const verifications = await this.stores.verifications.list(taskId);
+    const verification = verifications.slice().reverse().find((record) => record.kind === "test");
+    const events = await this.stores.events.list(taskId);
+    const prompt = buildReviewPrompt({
+      task,
+      history,
+      question: trimmed,
+      diff,
+      verification,
+      verifications,
+      events,
+      stage,
+    });
     const runtime = new TaskRuntime({
       stores: this.stores,
       task,
@@ -78,7 +80,7 @@ export class ReviewChatService {
         allowedTools: REVIEW_TOOLS,
         assembler,
         models: this.models,
-        systemPromptText: buildReviewSystemPrompt(task, stage),
+        systemPromptText: buildReviewSystemPrompt(task, stage ?? task.stage),
         allowWaiting: true,
         countAgainstBudget: false,
         // Review chat is not part of the execution budget; give it a separate timeout

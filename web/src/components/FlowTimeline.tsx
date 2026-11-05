@@ -53,12 +53,10 @@ export function FlowTimeline({
   task,
   events,
   verifications,
-  onAsk,
 }: {
   task: Task;
   events: EventItem[];
   verifications: VerificationRecord[];
-  onAsk: (stage: string) => void;
 }) {
   const stages = task.source === "event-center" || task.incidentId ? NEW_STAGES : LEGACY_STAGES;
   const currentIndex = stages.indexOf(task.stage);
@@ -123,7 +121,6 @@ export function FlowTimeline({
                 </div>
                 <div className="flow-actions">
                   {times.get(stage) ? <span className="flow-time">{time(times.get(stage))}</span> : null}
-                  <button className="link" onClick={() => onAsk(stage)}>问 AI</button>
                   {["REPAIR", "VERIFY", "PACKAGE"].includes(stage) ? (
                     <Link className="link" to={`/tasks/${task.id}/diff`}>看变更</Link>
                   ) : null}
