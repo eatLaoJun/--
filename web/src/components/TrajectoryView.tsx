@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { EventItem, Task, VerificationRecord } from "../types";
 import { flattenTrajectoryRecords, projectTrajectory, type StageGroup, type TrajectoryRecord } from "../trajectory/projection";
-import { TrajectoryOverview } from "./TrajectoryOverview";
+import { TrajectoryOverview, type OverviewMode } from "./TrajectoryOverview";
 import { TrajectoryLedger } from "./TrajectoryLedger";
 import { TrajectoryInspector } from "./TrajectoryInspector";
 
@@ -87,6 +87,7 @@ export function TrajectoryView({
   );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [overviewMode, setOverviewMode] = useState<OverviewMode>("balanced");
   const [selectedId, setSelectedId] = useState<string>();
   const [focusedRecordId, setFocusedRecordId] = useState<string>();
   const [focusedStage, setFocusedStage] = useState<string>();
@@ -184,6 +185,8 @@ export function TrajectoryView({
 
       <TrajectoryOverview
         projection={{ ...projection, stages, records: filteredRecords }}
+        mode={overviewMode}
+        onModeChange={setOverviewMode}
         selectedId={selectedId}
         onSelectRecord={(record) => selectRecord(record, true)}
         onSelectStage={focusStage}

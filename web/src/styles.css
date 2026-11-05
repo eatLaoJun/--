@@ -522,3 +522,22 @@ button.ghost.compact { padding: 5px 9px; font-size: 11px; }
   .trajectory-row { grid-template-columns: 16px 50px minmax(0, 1fr); }
   .record-metrics { display: none; }
 }
+
+/* Balanced timing overview: equal stage widths, records expanded per stage */
+.overview-head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.overview-mode { display: flex; gap: 4px; }
+.overview-balanced { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 4px; }
+.overview-stage-cell {
+  flex: 1 0 112px; min-width: 112px; background: #0a0f17; border: 1px solid #1b2536;
+  border-radius: 8px; padding: 6px 7px; cursor: pointer;
+}
+.overview-stage-cell.done { border-color: #235346; }
+.overview-stage-cell.current { border-color: #5d4a2c; background: #17160f; }
+.overview-stage-cell.pending { opacity: .55; }
+.overview-stage-cell:hover { filter: brightness(1.15); }
+.overview-stage-label { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; font-size: 10px; color: var(--text); }
+.overview-stage-meta { color: var(--muted); font-family: var(--mono); font-size: 8px; white-space: nowrap; }
+.overview-stage-track { position: relative; height: 24px; margin-top: 5px; border-top: 1px dashed #243147; }
+.overview-stage-cell .overview-tick { top: 6px; }
+.overview-empty-mark { position: absolute; left: 50%; top: 10px; width: 4px; height: 4px; border-radius: 50%; background: #2b3c55; transform: translateX(-50%); }
+.overview-stage-cell .overview-tick.selected { outline: 2px solid #fff; outline-offset: 1px; }

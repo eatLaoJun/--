@@ -464,6 +464,7 @@ delta / done / error
 **UI 细节**：
 
 - 多路由 React 工作台：Task Console、任务详情、Diff/证据、Runtime log / 审计时间线；
+- 时间概览有「均衡阶段」和「真实时间」两种模式，短阶段默认等宽，不被真实耗时压扁；
 - Trajectory 页是单一视图：上方时间概览（阶段 band + 记录 tick），下方阶段/Agent turn/工具 ledger；
 - 任务详情页不再单独放整体时间线；全部在 Trajectory 页；
 - Trajectory 参考 dsh：同一份 projection 驱动时间概览和 ledger；
