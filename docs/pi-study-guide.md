@@ -419,7 +419,7 @@ PR 状态
 
 ## 5.7 Web / SSE / 弹窗
 
-**文件**：`src/web/server.ts`、`src/web/static/*`
+**文件**：`src/web/server.ts`、`web/src/*`
 
 **接口**：
 
@@ -443,6 +443,7 @@ delta / done / error
 
 **UI 细节**：
 
+- 多路由 React 工作台：Task Console、任务详情、Diff/证据、Runtime log/时间线；
 - 评审对话是弹窗，可关闭/打开、Esc、点遮罩关闭；
 - 顶部操作栏 sticky；
 - 聊天向上阅读时不被轮询/流式 token 拉回底部；

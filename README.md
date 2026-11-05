@@ -93,7 +93,18 @@ npm run ui
 # 浏览器打开 http://127.0.0.1:4310
 ```
 
-左侧从 GitHub issue fixture 创建任务，执行完成后点击右上角“评审对话”打开弹窗提问；弹窗支持关闭、Esc、点击遮罩关闭，也可以直接在里面“要求修改”或“通过”。主页面可查看概览、diff、验证证据和交付状态。当前是轻量原生 Web 工作台，React 版本可以后续替换。
+左侧从 GitHub issue fixture 创建任务，执行完成后点击右上角“评审对话”打开弹窗提问；弹窗支持关闭、Esc、点击遮罩关闭，也可以直接在里面“要求修改”或“通过”。
+
+当前是多页面 React 工作台（Vite + React Router + SSE），不是单页 tab：
+
+| 路由 | 页面 |
+| --- | --- |
+| `/` | Task Console 任务台：阶段/生命周期/失败筛选、搜索、统计 |
+| `/tasks/:id` | 任务详情：概览、sticky 操作栏、评审对话弹窗 |
+| `/tasks/:id/diff` | Diff / 变更证据：patch、文件、验证记录、artifact |
+| `/tasks/:id/timeline` | Runtime log / 审计时间线：事件筛选、原始事件、恢复记录 |
+
+开发模式：后端 `npm run dev -- serve --port 4310`，前端 `npm run web:dev`（Vite 5173 代理 `/api`）。
 
 ### GitHub issue 输入
 
@@ -187,7 +198,7 @@ src/
   store/           Task/Artifact/Operation/Checkpoint/Verification/Lease/Event/ReviewChat
   eval/review/     Review 评估
   eval/swebench/   SWE-bench 双臂评估
-  web/             Web 工作台（Node HTTP + 静态 UI + SSE）
+  web/             React 工作台（Vite + React Router + SSE）
   cli.ts
 fixtures/          示例仓库、GitHub issue、工单、Review 标签、SWE-bench 实例
 scripts/           demo 脚本
@@ -230,7 +241,7 @@ docs/pi-study-guide.md  pi × ForgePilot 学习手册（阅读路线 + 实验 + 
 
 ## 9. 已知限制
 
-- Web 工作台是原生 HTML/JS + SSE，不是 React；React 版本可后续替换。
+- Web 工作台是 React + Vite + SSE；旧的 `src/web/static` 仅作为未构建时的 fallback。
 - 思考过程来自 Provider 的 reasoning 事件；不同模型可能只返回工具/文本，或对思考内容做脱敏。
 - 审核对话是只读的；要求改码必须走“要求修改”回退 REPAIR，不能在对话里直接 patch。
 - 没有 Docker/容器级隔离；真实部署应把执行面放进一次性沙箱。
@@ -255,7 +266,7 @@ npm test
 - 补丁落盘后崩溃恢复、PR 响应丢失恢复、验证指纹失效；
 - `git diff` 指纹跨 commit 稳定、changedFiles 路径正确；
 - SWE-bench 双臂执行、隐藏测试后置、空补丁不判 resolved；
-- Web 工作台静态页面与任务/Issue API。
+- React 工作台路由、任务筛选、事件时间线 API、SPA fallback。
 
 ## 11. 面试一句话
 

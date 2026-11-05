@@ -197,7 +197,7 @@ POST /api/tasks/:id/request-changes  -> 退回 REPAIR
 POST /api/tasks/:id/cancel           -> 取消并收敛
 ```
 
-页面包含：Issue 创建任务、任务列表、概览、diff、验证证据、评审对话、通过/要求修改/取消按钮。当前是原生 HTML/JS + SSE，React 工作台可后续替换。
+页面包含：Task Console 任务台（阶段/失败筛选）、任务详情、Diff/证据、Runtime log/审计时间线，以及评审对话弹窗。当前是 Vite + React Router + SSE 多页面工作台。
 
 ## 8. 重新生成
 

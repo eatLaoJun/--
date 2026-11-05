@@ -41,7 +41,22 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
         return sendJson(res, 200, await listIssueFixtures(options.projectRoot));
       }
       if (url.pathname === "/api/tasks" && req.method === "GET") {
-        const tasks = await harness.listTasks();
+        const stage = url.searchParams.get("stage") ?? undefined;
+        const lifecycle = url.searchParams.get("lifecycle") ?? undefined;
+        const failedOnly = url.searchParams.get("failed") === "1";
+        const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+        let tasks = await harness.listTasks();
+        if (stage) tasks = tasks.filter((task) => task.stage === stage);
+        if (lifecycle) tasks = tasks.filter((task) => task.lifecycle === lifecycle);
+        if (failedOnly) tasks = tasks.filter((task) => ["FAILED", "PAUSED"].includes(task.lifecycle));
+        if (query) {
+          tasks = tasks.filter((task) =>
+            [task.id, task.ticketId, task.title, task.issueUrl ?? ""]
+              .join(" ")
+              .toLowerCase()
+              .includes(query),
+          );
+        }
         return sendJson(
           res,
           200,
@@ -81,6 +96,14 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
         if (!action && req.method === "GET") {
           return sendJson(res, 200, await taskDetail(harness, taskId));
         }
+        if (action === "events" && req.method === "GET") {
+          const limit = Math.min(Number(url.searchParams.get("limit") ?? "400") || 400, 2000);
+          const type = url.searchParams.get("type");
+          const events = (await readJsonl<Record<string, unknown>>(path.join(harness.config.root, "tasks", taskId, "events.jsonl")))
+            .filter((event) => !type || event.type === type)
+            .slice(-limit);
+          return sendJson(res, 200, { taskId, events, total: events.length });
+        }
         if (action === "chat" && req.method === "POST") {
           const body = await readBody(req);
           const message = typeof body.message === "string" ? body.message : "";
@@ -105,6 +128,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
         }
       }
 
+      if (url.pathname.startsWith("/api/")) {
+        return sendJson(res, 404, { error: "not found" });
+      }
       if (req.method === "GET") {
         return serveStatic(res, staticDir, url.pathname);
       }
@@ -235,7 +261,11 @@ async function listIssueFixtures(projectRoot: string) {
 
 async function resolveStaticDir(): Promise<string> {
   const local = path.dirname(fileURLToPath(import.meta.url));
-  const candidates = [path.join(local, "static"), path.join(process.cwd(), "src", "web", "static")];
+  const candidates = [
+    path.join(process.cwd(), "web", "dist"),
+    path.join(local, "static"),
+    path.join(process.cwd(), "src", "web", "static"),
+  ];
   for (const candidate of candidates) {
     try {
       await readFile(path.join(candidate, "index.html"), "utf8");
@@ -268,6 +298,17 @@ async function serveStatic(res: http.ServerResponse, dir: string, pathname: stri
               : "application/octet-stream";
     res.writeHead(200, { "content-type": type }).end(content);
   } catch {
+    // SPA fallback: /tasks/<id>, /tasks/<id>/diff and /tasks/<id>/timeline
+    // are client-side routes, not files on disk.
+    if (!path.extname(relative)) {
+      try {
+        const index = await readFile(path.join(dir, "index.html"));
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(index);
+        return;
+      } catch {
+        // fall through
+      }
+    }
     res.writeHead(404).end("not found");
   }
 }

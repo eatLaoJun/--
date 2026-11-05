@@ -16,19 +16,29 @@
     "demo:review": "tsx scripts/demo.ts review",
     "demo:swebench": "tsx scripts/demo-swebench.ts",
     "demo:fault": "tsx scripts/demo.ts fault",
-    "ui": "tsx src/cli.ts serve --port 4310",
+    "ui": "npm run web:build && tsx src/cli.ts serve --port 4310",
     "demo:review-chat": "tsx scripts/demo-review-chat.ts",
-    "demo:review-changes": "tsx scripts/demo-review-chat.ts --request-changes"
+    "demo:review-changes": "tsx scripts/demo-review-chat.ts --request-changes",
+    "web:build": "vite build --config web/vite.config.ts",
+    "web:dev": "vite --config web/vite.config.ts",
+    "typecheck:web": "tsc -p web/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.4.0",
     "@earendil-works/pi-ai": "1.4.0",
     "@earendil-works/pi-coding-agent": "1.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.1",
     "typebox": "1.3.27"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vite": "^6.1.0"
   }
 }

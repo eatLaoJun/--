@@ -275,7 +275,7 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 
 ### 8.4 Web 工作台
 
-`src/web/server.ts` 用 Node HTTP + 静态 HTML/JS，不引入前端构建链；SSE 用于流式回答。
+`src/web/server.ts` 用 Node HTTP 提供 API 和 SPA fallback；`web/` 是 Vite + React Router 工作台，SSE 用于流式回答。
 
 | 路由 | 作用 |
 | --- | --- |
@@ -288,7 +288,7 @@ REPAIR → VERIFY → PACKAGE / WAITING_APPROVAL
 | `POST /api/tasks/:id/request-changes` | 写回意见并回到 REPAIR |
 | `POST /api/tasks/:id/cancel` | 取消并收敛 |
 
-页面结构：左侧任务列表 + Issue 创建；右侧概览、diff、证据；点击“评审对话”打开可关闭的弹窗（Esc/遮罩/×）。弹窗内显示固定上下文 chips、聊天记录、thinking/tool trace、输入框和“要求修改/通过/发送”。轮询只刷新状态，SSE 只负责流式回答。
+页面结构（多路由，不是单页 tab）：`/` Task Console（阶段/生命周期/失败筛选、搜索）、`/tasks/:id` 概览与审批、`/tasks/:id/diff` 变更与验证证据、`/tasks/:id/timeline` Runtime log/审计时间线。点击“评审对话”打开可关闭弹窗（Esc/遮罩/×），显示固定上下文 chips、聊天记录、thinking/tool trace、输入框和“要求修改/通过/发送”。轮询只刷新状态，SSE 只负责流式回答。
 
 ### 8.5 GitHub issue 适配器
 
