@@ -212,7 +212,7 @@ export function FlowTimeline({
                       <button className="link" onClick={() => toggleLog(stage)}>
                         Runtime log · {stageEvents.length} 条 {logOpen ? "收起" : "展开"}
                       </button>
-                      <Link className="link" to={`/tasks/${task.id}/timeline`}>完整审计 →</Link>
+                      <a className="link" href="#all-events">全部事件 ↓</a>
                     </div>
                     {logOpen ? (
                       <div className="stage-log-list">

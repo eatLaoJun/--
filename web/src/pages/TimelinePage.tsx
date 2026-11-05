@@ -5,6 +5,7 @@ import { Badge } from "../components/Badge";
 import { eventLabel, eventTone, time } from "../format";
 import type { EventItem } from "../types";
 import { useTaskDetail } from "../useTaskDetail";
+import { FlowTimeline } from "../components/FlowTimeline";
 import { summarizeEvent } from "../event-summary";
 
 const FILTERS = [
@@ -73,6 +74,7 @@ export function TimelinePage() {
           <p className="eyebrow">RUNTIME LOG / AUDIT</p>
           <h2>Runtime log / 审计时间线</h2>
           <p className="muted">{detail.task.ticketId} · {detail.task.title}</p>
+          <p className="hint">整体阶段时间线 + 每个阶段的 Runtime log；下方是完整事件流筛选。</p>
         </div>
         <div className="head-actions">
           <Link className="ghost" to={`/tasks/${detail.task.id}`}>返回概览</Link>
@@ -86,7 +88,9 @@ export function TimelinePage() {
         <Link to={`/tasks/${detail.task.id}/timeline`} className="active">Runtime log / 审计时间线</Link>
       </nav>
 
-      <div className="timeline-toolbar">
+      <FlowTimeline key={detail.task.id} task={detail.task} events={events} verifications={detail.verifications} />
+
+      <div id="all-events" className="timeline-toolbar">
         <div className="filter-chips">
           {FILTERS.map((item) => (
             <button key={item.value} className={filter === item.value ? "chip active" : "chip"} onClick={() => setFilter(item.value)}>

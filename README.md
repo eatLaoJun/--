@@ -108,7 +108,7 @@ npm run ui
 | `/` | Task Console 任务台：阶段/生命周期/失败筛选、搜索、统计 |
 | `/tasks/:id` | 任务详情：概览、sticky 操作栏、评审对话弹窗 |
 | `/tasks/:id/diff` | Diff / 变更证据：patch、文件、验证记录、artifact |
-| `/tasks/:id/timeline` | Runtime log / 审计时间线：事件筛选、原始事件、恢复记录 |
+| `/tasks/:id/timeline` | Runtime log / 审计时间线：整体阶段时间线（可收放）+ 每阶段内嵌日志 + 完整事件流筛选/原始事件 |
 
 开发模式：后端 `npm run dev -- serve --port 4310`，前端 `npm run web:dev`（Vite 5173 代理 `/api`）。
 

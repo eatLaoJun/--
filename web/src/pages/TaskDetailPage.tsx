@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ReviewModal } from "../components/ReviewModal";
-import { FlowTimeline } from "../components/FlowTimeline";
 import { Badge } from "../components/Badge";
 import { RichText } from "../components/RichText";
 import { shortHash, time } from "../format";
@@ -95,13 +94,6 @@ export function TaskDetailPage() {
           <span>{task.budget.repairIterations}/{task.budget.maxRepairIterations} repair</span>
         </div>
       </div>
-
-      <FlowTimeline
-        key={task.id}
-        task={task}
-        events={detail.events}
-        verifications={detail.verifications}
-      />
 
       <nav className="page-links">
         <Link to={`/tasks/${task.id}`} className="active">概览</Link>
