@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { EventItem, Task, VerificationRecord } from "../types";
 import { Badge } from "./Badge";
-import { shortHash, time } from "../format";
+import { eventLabel, eventTone, shortHash, time } from "../format";
+import { summarizeEvent } from "../event-summary";
 
 const NEW_STAGES = ["INGEST", "RESOLVE", "PLAN", "REPAIR", "VERIFY", "PACKAGE", "PUBLISH", "DONE"];
 const LEGACY_STAGES = ["PREPARE", "REPRODUCE", "REPAIR", "VERIFY", "PACKAGE", "PUBLISH", "DONE"];
@@ -66,9 +67,11 @@ export function FlowTimeline({
   const latestBuild = [...verifications].reverse().find((item) => item.kind === "build");
   const [open, setOpen] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([task.stage]));
+  const [openLogs, setOpenLogs] = useState<Set<string>>(() => new Set([task.stage]));
 
   useEffect(() => {
     setExpanded((previous) => new Set(previous).add(task.stage));
+    setOpenLogs((previous) => new Set(previous).add(task.stage));
   }, [task.stage]);
 
   function toggleStage(stage: string) {
@@ -83,6 +86,15 @@ export function FlowTimeline({
   function toggleAll() {
     if (expanded.size >= stages.length) setExpanded(new Set());
     else setExpanded(new Set(stages));
+  }
+
+  function toggleLog(stage: string) {
+    setOpenLogs((previous) => {
+      const next = new Set(previous);
+      if (next.has(stage)) next.delete(stage);
+      else next.add(stage);
+      return next;
+    });
   }
 
   return (
@@ -190,6 +202,37 @@ export function FlowTimeline({
               ) : null}
 
               {stage === "DONE" && task.summary ? <div className="flow-detail">{task.summary}</div> : null}
+
+              {(() => {
+                const stageEvents = events.filter((event) => event.stage === stage);
+                const logOpen = openLogs.has(stage);
+                return (
+                  <div className="stage-log">
+                    <div className="stage-log-head">
+                      <button className="link" onClick={() => toggleLog(stage)}>
+                        Runtime log · {stageEvents.length} 条 {logOpen ? "收起" : "展开"}
+                      </button>
+                      <Link className="link" to={`/tasks/${task.id}/timeline`}>完整审计 →</Link>
+                    </div>
+                    {logOpen ? (
+                      <div className="stage-log-list">
+                        {stageEvents.length === 0 ? (
+                          <div className="muted">该阶段暂无事件。</div>
+                        ) : (
+                          stageEvents.slice(-40).map((event, eventIndex) => (
+                            <div className={`stage-log-event ${eventTone(event.type)}`} key={`${event.at}-${event.type}-${eventIndex}`}>
+                              <time>{time(event.at)}</time>
+                              <span className="stage-log-type">{eventLabel(event.type)}</span>
+                              <span className="stage-log-summary">{summarizeEvent(event)}</span>
+                            </div>
+                          ))
+                        )}
+                        {stageEvents.length > 40 ? <div className="muted">仅显示最近 40 条，完整记录见“完整审计”。</div> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()}
                 </>
               ) : null}
             </div>

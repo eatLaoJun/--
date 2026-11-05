@@ -450,7 +450,7 @@ delta / done / error
 
 **UI 细节**：
 
-- 多路由 React 工作台：Task Console、任务详情、Diff/证据、Runtime log/时间线；
+- 多路由 React 工作台：Task Console、任务详情、Diff/证据、完整审计；阶段卡片内嵌该阶段 Runtime log；
 - 评审对话是弹窗，可关闭/打开、Esc、点遮罩关闭；
 - 顶部操作栏 sticky；
 - 聊天向上阅读时不被轮询/流式 token 拉回底部；

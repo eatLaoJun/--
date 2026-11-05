@@ -387,3 +387,23 @@ button.ghost.compact { padding: 5px 9px; font-size: 11px; }
 .flow-chevron { color: var(--muted); font-size: 11px; width: 12px; display: inline-block; }
 .flow-stage.collapsed .flow-card { padding-bottom: 9px; }
 .flow-stage.collapsed .flow-desc { color: #6f819a; }
+
+/* Runtime log nested under each stage */
+.stage-log { margin-top: 9px; border-top: 1px dashed #243147; padding-top: 8px; }
+.stage-log-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.stage-log-list { margin-top: 7px; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow: auto; }
+.stage-log-event {
+  display: grid; grid-template-columns: 128px 110px minmax(0, 1fr); gap: 8px;
+  align-items: baseline; font-size: 11px; padding: 4px 7px; border-radius: 6px;
+  background: #0d1622; border-left: 2px solid #2b3c55;
+}
+.stage-log-event.info { border-left-color: var(--accent-2); }
+.stage-log-event.success { border-left-color: var(--ok); }
+.stage-log-event.warn { border-left-color: var(--warn); }
+.stage-log-event.danger { border-left-color: var(--danger); }
+.stage-log-event time { color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.stage-log-type { color: var(--text); font-weight: 550; }
+.stage-log-summary { color: #9fb0c7; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .stage-log-event { grid-template-columns: 1fr; gap: 2px; }
+}
