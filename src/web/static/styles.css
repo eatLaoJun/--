@@ -198,3 +198,12 @@ pre.diff { margin: 0; background: #0a0f17; border: 1px solid var(--line); border
 .tool-chip.ok { color: var(--ok); border-color: #235346; background: #0e2a24; }
 .tool-chip.fail { color: var(--danger); border-color: #5c2a33; background: #2a1418; }
 .trace-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.chat-panel { position: relative; }
+.scroll-bottom {
+  position: absolute; right: 22px; bottom: 104px; z-index: 5;
+  background: var(--panel-2); color: var(--text); border: 1px solid #35506f;
+  border-radius: 999px; padding: 7px 12px; font-size: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.scroll-bottom:hover { border-color: var(--accent); color: var(--accent); }

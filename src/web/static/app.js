@@ -7,6 +7,8 @@ const state = {
   tab: "overview",
   streaming: false,
   poll: undefined,
+  chatAutoScroll: true,
+  lastChatSignature: null,
 };
 
 async function api(path, options = {}) {
@@ -110,6 +112,8 @@ function renderTaskList() {
 async function selectTask(taskId) {
   state.selectedId = taskId;
   state.tab = "overview";
+  state.lastChatSignature = null;
+  state.chatAutoScroll = true;
   await loadDetail();
   renderTabs();
 }
@@ -282,6 +286,26 @@ function renderEvidence(detail) {
     : `<div class="empty-small">暂无验证记录。</div>`;
 }
 
+function isNearBottom(box) {
+  if (!box) return true;
+  return box.scrollHeight - box.scrollTop - box.clientHeight < 64;
+}
+
+function updateScrollButton() {
+  const box = $("#chat-messages");
+  const button = $("#scroll-bottom");
+  if (!box || !button) return;
+  button.hidden = state.tab !== "chat" || isNearBottom(box);
+}
+
+function scrollChatToBottom(smooth = false) {
+  const box = $("#chat-messages");
+  if (!box) return;
+  state.chatAutoScroll = true;
+  box.scrollTo({ top: box.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  updateScrollButton();
+}
+
 function renderToolTrace(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return "";
   return `<div class="trace-tools">` +
@@ -302,6 +326,19 @@ function renderChat(history) {
     // Keep the streaming bubble while deltas arrive.
   }
   const messages = (history || []).filter((message) => message.role !== "system");
+  const signature = messages
+    .map(
+      (message) =>
+        `${message.id}:${message.at}:${String(message.content).length}:${message.meta?.tools?.length ?? 0}`,
+    )
+    .join("|");
+  if (signature === state.lastChatSignature && !state.streaming) return;
+  state.lastChatSignature = signature;
+
+  const wasNearBottom = isNearBottom(box);
+  const previousHeight = box.scrollHeight;
+  const previousTop = box.scrollTop;
+  const distanceFromBottom = previousHeight - previousTop - box.clientHeight;
   const intro = `<div class="chat-intro">
       <b>评审对话</b>
       <span>可以问：为什么这样改？有没有边界情况？验证覆盖了什么？</span>
@@ -326,7 +363,15 @@ function renderChat(history) {
       `<div class="chat-empty">还没有对话。审批前先问清楚，再点“通过并创建 PR”或“要求修改”。</div>`,
     );
   }
-  box.scrollTop = box.scrollHeight;
+  if (wasNearBottom || state.chatAutoScroll) {
+    box.scrollTop = box.scrollHeight;
+    state.chatAutoScroll = true;
+  } else {
+    // Keep the reader's viewport anchored when a new message arrives while
+    // they are reading history above.
+    box.scrollTop = Math.max(0, box.scrollHeight - box.clientHeight - distanceFromBottom);
+  }
+  updateScrollButton();
 }
 
 function renderTabs() {
@@ -360,6 +405,7 @@ async function sendChat() {
   if (!message || state.streaming || !state.selectedId) return;
   input.value = "";
   state.streaming = true;
+  state.chatAutoScroll = true;
   const box = $("#chat-messages");
   if (box.querySelector(".chat-empty")) box.querySelector(".chat-empty").remove();
   box.insertAdjacentHTML(
@@ -424,25 +470,25 @@ async function sendChat() {
         const payload = JSON.parse(line.slice(6));
         if (payload.type === "delta") {
           body.innerHTML = richText(body.dataset.raw ? (body.dataset.raw += payload.text) : (body.dataset.raw = payload.text));
-          box.scrollTop = box.scrollHeight;
+          if (state.chatAutoScroll) box.scrollTop = box.scrollHeight;
         } else if (payload.type === "thinking_start") {
           thinkingBox.hidden = false;
         } else if (payload.type === "thinking_delta") {
           thinkingBox.hidden = false;
           thinkingText.textContent += payload.text;
           thinkingBox.scrollTop = thinkingBox.scrollHeight;
-          box.scrollTop = box.scrollHeight;
+          if (state.chatAutoScroll) box.scrollTop = box.scrollHeight;
         } else if (payload.type === "thinking_end") {
           thinkingBox.hidden = false;
         } else if (payload.type === "tool_start") {
           upsertTool(payload, false);
-          box.scrollTop = box.scrollHeight;
+          if (state.chatAutoScroll) box.scrollTop = box.scrollHeight;
         } else if (payload.type === "tool_update") {
           const chip = toolChips.get(payload.toolCallId);
           if (chip && payload.text) chip.title = payload.text;
         } else if (payload.type === "tool_end") {
           upsertTool(payload, true);
-          box.scrollTop = box.scrollHeight;
+          if (state.chatAutoScroll) box.scrollTop = box.scrollHeight;
         } else if (payload.type === "error") {
           body.innerHTML = `<span class="error">${escapeHtml(payload.error)}</span>`;
         }
@@ -522,6 +568,12 @@ function bind() {
   $("#approve-btn").addEventListener("click", approve);
   $("#changes-btn").addEventListener("click", requestChanges);
   $("#cancel-btn").addEventListener("click", cancelTask);
+  $("#scroll-bottom").addEventListener("click", () => scrollChatToBottom(true));
+  $("#chat-messages").addEventListener("scroll", () => {
+    const box = $("#chat-messages");
+    state.chatAutoScroll = isNearBottom(box);
+    updateScrollButton();
+  });
   $("#chat-input").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -532,7 +584,10 @@ function bind() {
     button.addEventListener("click", () => {
       state.tab = button.dataset.tab;
       renderTabs();
-      if (state.tab === "chat") $("#chat-input")?.focus();
+      if (state.tab === "chat") {
+        $("#chat-input")?.focus();
+        updateScrollButton();
+      }
     });
   }
 }
