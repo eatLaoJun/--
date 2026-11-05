@@ -170,7 +170,11 @@ Demo 中 `run-a` 得到 `TP=3, FP=1, FN=1, Undecided=1, P=0.750, R=0.750`；`run
 - 成本包含成功与失败尝试，报告平均输入/输出 Token、工具调用、墙钟时间；
 - 本地 verifier 与官方 SWE-bench Docker Harness 接口兼容，但本仓库跑出的数字不是官方排行榜结果。
 
-## 5. 目录
+## 5. 学习路线
+
+第一次接触这个项目，建议按 [docs/pi-study-guide.md](docs/pi-study-guide.md) 学习：先跑通 demo，再按依赖顺序读 8 个核心文件，最后做故障注入、上下文压缩、Review 评估和要求修改实验。相比直接顺序读代码，这条路线把「读代码 → 跑实验 → 回答问题」串起来了。
+
+## 6. 目录
 
 ```text
 src/
@@ -190,9 +194,10 @@ scripts/           demo 脚本
 tests/             确定性测试
 docs/design.md     详细设计
 docs/demo-evidence.md  本地真实运行证据与口径
+docs/pi-study-guide.md  pi × ForgePilot 学习手册（阅读路线 + 实验 + 自测）
 ```
 
-## 6. 与 pi-agent SDK 的关系
+## 7. 与 pi-agent SDK 的关系
 
 - 运行时固定 `@earendil-works/pi-coding-agent@1.4.0`（skill 基线版本）。
 - 系统提示词完全替换 pi 默认人设；`noSkills/noContextFiles` 关闭无关注入。
@@ -204,7 +209,7 @@ docs/demo-evidence.md  本地真实运行证据与口径
 - Review Chat 使用独立 180s wall clock；不会因为任务本身的旧 `elapsed` 已耗尽而在 10s 后 abort。
 - 一个阶段一个 session；跨阶段恢复靠结构化状态与制品，不靠聊天记录。
 
-## 7. 真实与模拟边界
+## 8. 真实与模拟边界
 
 **真实执行**
 
@@ -223,7 +228,7 @@ docs/demo-evidence.md  本地真实运行证据与口径
 - 存储：文件 + 原子写 + sha256 制品，可替换为 Postgres + 对象存储；
 - 评估：本地 verifier，可替换为官方 SWE-bench Docker Harness。
 
-## 8. 已知限制
+## 9. 已知限制
 
 - Web 工作台是原生 HTML/JS + SSE，不是 React；React 版本可后续替换。
 - 思考过程来自 Provider 的 reasoning 事件；不同模型可能只返回工具/文本，或对思考内容做脱敏。
@@ -234,7 +239,7 @@ docs/demo-evidence.md  本地真实运行证据与口径
 - 代码是 TS 运行时。简历里的 Python/React 控制面可以作为后续包装层；本仓库不声称它是生产控制面。
 - 简历中的 500+ 工程师、71 个 Bug、178→53 分钟是业务口径；本仓库只产出机制与可回放证据，不复现这些业务数字。
 
-## 9. 测试
+## 10. 测试
 
 ```bash
 npm test
@@ -252,6 +257,6 @@ npm test
 - SWE-bench 双臂执行、隐藏测试后置、空补丁不判 resolved；
 - Web 工作台静态页面与任务/Issue API。
 
-## 10. 面试一句话
+## 11. 面试一句话
 
 > ForgePilot 不是让模型直接接管研发流程，而是把 Bug 修复放进可控闭环：固定代码版本，由 Agent 定位和改码，由 Harness 验证、绑定证据、等待人工审批，再交付带验证记录的 PR。技术上重点解决长上下文不丢约束、任务中断不重复副作用，以及用两套离线评估分别检验 Review 质量和修复效果。
