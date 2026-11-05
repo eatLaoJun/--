@@ -98,6 +98,7 @@ export function TaskDetailPage() {
       </div>
 
       <FlowTimeline
+        key={task.id}
         task={task}
         events={detail.events}
         verifications={detail.verifications}

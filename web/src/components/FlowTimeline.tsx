@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { EventItem, Task, VerificationRecord } from "../types";
 import { Badge } from "./Badge";
@@ -65,6 +66,26 @@ export function FlowTimeline({
   const times = stageTimes(task, events);
   const latestTest = [...verifications].reverse().find((item) => item.kind === "test");
   const latestBuild = [...verifications].reverse().find((item) => item.kind === "build");
+  const [open, setOpen] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([task.stage]));
+
+  useEffect(() => {
+    setExpanded((previous) => new Set(previous).add(task.stage));
+  }, [task.stage]);
+
+  function toggleStage(stage: string) {
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(stage)) next.delete(stage);
+      else next.add(stage);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (expanded.size >= stages.length) setExpanded(new Set());
+    else setExpanded(new Set(stages));
+  }
 
   return (
     <div className="flow-timeline">
@@ -72,24 +93,32 @@ export function FlowTimeline({
         <div>
           <p className="eyebrow">END-TO-END FLOW</p>
           <h3>整体时间线</h3>
+          <p className="hint flow-summary">
+            {stages.length} 个阶段 · 当前 {task.stage}/{task.lifecycle} · {open ? "点击阶段标题可展开/收起" : "时间线已收起"}
+          </p>
         </div>
-        <span className="hint">{task.source === "event-center" ? "事件中心 → 仓库 → 方案 → 改码 → 验证 → PR" : "工单 → 准备 → 复现 → 改码 → 验证 → PR"}</span>
+        <div className="flow-head-actions">
+          <button className="link" onClick={toggleAll}>{expanded.size >= stages.length ? "收起全部阶段" : "展开全部阶段"}</button>
+          <button className="ghost compact" onClick={() => setOpen((value) => !value)}>{open ? "收起时间线" : "展开时间线"}</button>
+        </div>
       </div>
-      {stages.map((stage, index) => {
+      {open ? stages.map((stage, index) => {
         const status = done || (currentIndex >= 0 && index < currentIndex) ? "done" : index === currentIndex ? "current" : "pending";
+        const isExpanded = expanded.has(stage);
         return (
-          <section className={`flow-stage ${status}`} key={stage}>
+          <section className={`flow-stage ${status} ${isExpanded ? "expanded" : "collapsed"}`} key={stage}>
             <div className="flow-rail">
               <span className="flow-dot">{status === "done" ? "✓" : index + 1}</span>
             </div>
             <div className="flow-card">
               <div className="flow-card-head">
                 <div>
-                  <div className="flow-title">
+                  <button className="flow-title flow-title-btn" aria-expanded={isExpanded} onClick={() => toggleStage(stage)}>
+                    <span className="flow-chevron">{isExpanded ? "▾" : "▸"}</span>
                     <b>{LABELS[stage] ?? stage}</b>
                     <span className="event-raw-type">{stage}</span>
                     <Badge value={status === "done" ? "DONE" : status === "current" ? task.lifecycle : "PENDING"} tone={status === "done" ? "success" : status === "current" ? "warn" : "muted"} />
-                  </div>
+                  </button>
                   <p className="muted flow-desc">{DESCRIPTIONS[stage] ?? ""}</p>
                 </div>
                 <div className="flow-actions">
@@ -104,6 +133,8 @@ export function FlowTimeline({
                 </div>
               </div>
 
+              {isExpanded ? (
+                <>
               {stage === "INGEST" ? (
                 <div className="flow-detail">
                   <span>{task.service ?? task.projectId}</span>
@@ -162,10 +193,12 @@ export function FlowTimeline({
               ) : null}
 
               {stage === "DONE" && task.summary ? <div className="flow-detail">{task.summary}</div> : null}
+                </>
+              ) : null}
             </div>
           </section>
         );
-      })}
+      }) : null}
     </div>
   );
 }

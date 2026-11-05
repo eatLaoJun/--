@@ -189,6 +189,8 @@ Demo 中 `run-a` 得到 `TP=3, FP=1, FN=1, Undecided=1, P=0.750, R=0.750`；`run
 
 第一次接触这个项目，建议按 [docs/pi-study-guide.md](docs/pi-study-guide.md) 学习：先跑通 demo，再按依赖顺序读 8 个核心文件，最后做故障注入、上下文压缩、Review 评估和要求修改实验。相比直接顺序读代码，这条路线把「读代码 → 跑实验 → 回答问题」串起来了。
 
+后续计划见 [docs/roadmap-m2-m5.md](docs/roadmap-m2-m5.md)：M1 已完成，M2–M5 只保存方案，不代表已实现。
+
 ## 6. 目录
 
 ```text
@@ -210,6 +212,7 @@ tests/             确定性测试
 docs/design.md     详细设计
 docs/demo-evidence.md  本地真实运行证据与口径
 docs/pi-study-guide.md  pi × ForgePilot 学习手册（阅读路线 + 实验 + 自测）
+docs/roadmap-m2-m5.md    M2–M5 路线图（审核/合并、事件中心、生产化、评估）
 ```
 
 ## 7. 与 pi-agent SDK 的关系

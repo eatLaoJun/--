@@ -378,3 +378,12 @@ button.attention { border-color: var(--warn) !important; color: var(--warn) !imp
   .flow-card-head { flex-direction: column; }
   .flow-actions { justify-content: flex-start; }
 }
+
+.flow-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.flow-summary { margin: 4px 0 0; font-size: 11px; }
+button.ghost.compact { padding: 5px 9px; font-size: 11px; }
+.flow-title-btn { background: none; border: 0; padding: 0; color: var(--text); text-align: left; cursor: pointer; }
+.flow-title-btn:hover b { color: var(--accent); }
+.flow-chevron { color: var(--muted); font-size: 11px; width: 12px; display: inline-block; }
+.flow-stage.collapsed .flow-card { padding-bottom: 9px; }
+.flow-stage.collapsed .flow-desc { color: #6f819a; }
