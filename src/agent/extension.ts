@@ -15,7 +15,7 @@ export interface HarnessExtensionOptions {
   allowWaiting?: boolean;
   countAgainstBudget?: boolean;
   onContextMetrics?: (metrics: ContextMetrics) => void;
-  onToolCall?: (name: string, input: unknown) => void;
+  onToolCall?: (name: string, input: unknown, toolCallId: string) => void;
 }
 
 const HARD_BLOCKED = new Set(["bash", "powershell", "edit", "write"]);
@@ -98,7 +98,7 @@ export function createHarnessExtension(options: HarnessExtensionOptions): Extens
           return { block: true, reason: pathError };
         }
         await options.runtime.countToolCall(event.toolName, options.countAgainstBudget !== false);
-        options.onToolCall?.(event.toolName, event.input);
+        options.onToolCall?.(event.toolName, event.input, event.toolCallId);
         return undefined;
       } catch (err) {
         if (process.env.FORGEPILOT_DEBUG_EVENTS) console.error("[gate] error", (err as Error).message);

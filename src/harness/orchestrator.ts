@@ -495,8 +495,8 @@ export class ForgePilotHarness {
         onContextMetrics: (metrics) => this.contextMetrics.push(metrics),
         onSession: (session) => this.activeSessions.set(task.id, session),
         onSessionDisposed: () => this.activeSessions.delete(task.id),
-        onToolCall: (name, input) => {
-          void runtime.event("tool_call", { name, input: sanitizeInput(input) });
+        onToolCall: (name, input, toolCallId) => {
+          void runtime.event("tool_call", { toolCallId, name, input: sanitizeInput(input) });
         },
       });
       this.afterFault(runtime);
@@ -602,8 +602,8 @@ export class ForgePilotHarness {
         onContextMetrics: (metrics) => this.contextMetrics.push(metrics),
         onSession: (session) => this.activeSessions.set(task.id, session),
         onSessionDisposed: () => this.activeSessions.delete(task.id),
-        onToolCall: (name, input) => {
-          void runtime.event("tool_call", { name, input: sanitizeInput(input) });
+        onToolCall: (name, input, toolCallId) => {
+          void runtime.event("tool_call", { toolCallId, name, input: sanitizeInput(input) });
         },
       });
       this.afterFault(runtime);

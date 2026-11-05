@@ -177,28 +177,27 @@ function toolRecordsForStage(
   events: EventItem[],
   task: Task,
 ): TrajectoryRecord[] {
+  void task;
   const calls = new Map<string, EventItem>();
   const results = new Map<string, EventItem>();
+  const orphanCalls: EventItem[] = [];
   for (const event of events) {
     const id = event.detail?.toolCallId;
-    if (typeof id !== "string") continue;
-    if (event.type === "tool_call") calls.set(id, event);
-    if (event.type === "tool_result") results.set(id, event);
+    if (event.type === "tool_call") {
+      if (typeof id === "string") calls.set(id, event);
+      else orphanCalls.push(event);
+    }
+    if (event.type === "tool_result" && typeof id === "string") results.set(id, event);
   }
 
   const records: TrajectoryRecord[] = [];
-  const ids = new Set([...calls.keys(), ...results.keys()]);
-  for (const id of ids) {
-    const call = calls.get(id);
-    const result = results.get(id);
+  const usedCallIds = new Set<string>();
+
+  const push = (id: string, call: EventItem | undefined, result: EventItem | undefined) => {
     const callDetail = call?.detail ?? {};
     const resultDetail = result?.detail ?? {};
     const toolName = String(callDetail.name ?? resultDetail.toolName ?? "tool");
-    const status: TrajectoryStatus = !result
-      ? "pending"
-      : resultDetail.isError
-        ? "error"
-        : "ok";
+    const status: TrajectoryStatus = !result ? "pending" : resultDetail.isError ? "error" : "ok";
     const summary =
       typeof resultDetail.summary === "string" && resultDetail.summary.trim()
         ? resultDetail.summary
@@ -223,7 +222,32 @@ function toolRecordsForStage(
         typeof resultDetail.summary === "string" ? resultDetail.summary.match(ARTIFACT_RE)?.[0] : undefined,
       detail: { call: callDetail, result: resultDetail },
     });
+  };
+
+  for (const [id, result] of results) {
+    let call = calls.get(id);
+    if (call) {
+      usedCallIds.add(id);
+    } else {
+      // Older event logs did not persist toolCallId on tool_call. Pair the
+      // nearest preceding call with the same tool name so inputs remain visible.
+      const name = String(result.detail?.toolName ?? "");
+      const index = orphanCalls.findIndex(
+        (candidate) =>
+          String(candidate.detail?.name ?? "") === name && candidate.at <= result.at,
+      );
+      if (index >= 0) call = orphanCalls.splice(index, 1)[0];
+    }
+    push(id, call, result);
   }
+
+  for (const [id, call] of calls) {
+    if (!usedCallIds.has(id)) push(id, call, undefined);
+  }
+  for (const call of orphanCalls) {
+    push(`orphan-${call.at}-${String(call.detail?.name ?? "tool")}`, call, undefined);
+  }
+
   return records.sort((a, b) => a.at - b.at);
 }
 
@@ -277,6 +301,19 @@ function processStage(
     }
 
     pending.push(eventRecord(event, task, verifications, index));
+  }
+  // Old logs may have a tool call without a matching result event. Keep those
+  // records visible instead of dropping them. Tool records already nested under
+  // an assistant turn count as present too.
+  const known = new Set<TrajectoryRecord>();
+  const remember = (record: TrajectoryRecord) => {
+    known.add(record);
+    for (const child of record.children ?? []) remember(child);
+  };
+  records.forEach(remember);
+  pending.forEach(remember);
+  for (const tool of tools) {
+    if (!known.has(tool)) pending.push(tool);
   }
   flushPending();
 

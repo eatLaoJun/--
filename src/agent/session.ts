@@ -64,7 +64,7 @@ export interface PiStageRunOptions {
   wallClockMs?: number;
   recordAttempt?: boolean;
   onContextMetrics?: (metrics: ContextMetrics) => void;
-  onToolCall?: (name: string, input: unknown) => void;
+  onToolCall?: (name: string, input: unknown, toolCallId: string) => void;
   onText?: (delta: string) => void;
   onStreamEvent?: (event: AgentStreamEvent) => void;
   onSession?: (session: AgentSession) => void;
